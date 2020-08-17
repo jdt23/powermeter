@@ -1,23 +1,7 @@
+#include <SevSeg.h>
+SevSeg sevseg;
+
 #include <ArduinoBLE.h>
-
-// https://github.com/sigvaldm/SevenSeg
-#include <SevenSeg.h>
-//                           a, b, c, d, e, f, g
-SevenSeg      powerDisplay (A0, 2,A7,A3,A2,A1,A6);
-SevenSeg resistanceDisplay (A0, 2,A7,A3,A2,A1,A6);
-SevenSeg    cadenceDisplay (A0, 2,A7,A3,A2,A1,A6);
-// the display i bought:    11, 7, 4, 2, 1,10, 5 (3 is DP), selects are 12, 9, 8
-
-const int numOfDigits=3;
-int      digitPinsPower[numOfDigits]={ 3, 4, 5};
-int digitPinsResistance[numOfDigits]={11, 6, 7};
-int    digitPinsCadence[numOfDigits]={ 8, 9,10};
-
-float displayFrequency = 100;
-//float displayFrequency = 50;
-float digitDelay = 1000000.0f / (3.0f * numOfDigits * displayFrequency);
-//8 displays, so T = 1/nF = 1/(8*100) = 1250 us
-//float digitDelay = 1000;
 
 int counter = 0;
 
@@ -31,14 +15,7 @@ void displayPowerResistanceCadence (unsigned char power, unsigned char resistanc
    * Pin Number: 11; Continuous Forward Current: 20mA; Average Forward Voltage: 2V; Power Consumption: 36mW
    */
 
-  powerDisplay.write(power);
-  powerDisplay.clearDisp();
-
-  resistanceDisplay.write(resistance);
-  resistanceDisplay.clearDisp();
-
-  cadenceDisplay.write(cadence);
-  cadenceDisplay.clearDisp();
+  sevseg.setNumber(1000000*power + 1000*resistance + cadence);
 
 }
 
@@ -46,24 +23,23 @@ void displayPowerResistanceCadence (unsigned char power, unsigned char resistanc
 void setup() {
   if (DEBUG) Serial.begin(9600);
 
-  powerDisplay.setDutyCycle(displayFrequency);
-  powerDisplay.setDigitPins(numOfDigits, digitPinsPower);
-  powerDisplay.setRefreshRate(displayFrequency);
-  //powerDisplay.setDigitDelay(digitDelay);
-  powerDisplay.setCommonCathode();
+  byte segmentPins[] = {A0, 2,A7,A3,A2,A1,A6};
+
+  byte numDigits = 9;
+  byte digitPins[] = { 3, 4, 5,  // power pins
+                      11, 6, 7,  // resistance pins
+                      8, 9, 10}; // cadence pins
   
-  resistanceDisplay.setDutyCycle(displayFrequency);
-  resistanceDisplay.setDigitPins(numOfDigits, digitPinsResistance);
-  resistanceDisplay.setRefreshRate(displayFrequency);
-  //resistanceDisplay.setDigitDelay(digitDelay);
-  resistanceDisplay.setCommonCathode();
+  bool resistorsOnSegments = true; 
+  bool updateWithDelaysIn = true;
+  byte hardwareConfig = COMMON_CATHODE; 
+  bool updateWithDelays = false; // Default 'false' is Recommended
+  bool leadingZeros = true; // Use 'true' if you'd like to keep the leading zeros
+  bool disableDecPoint = true; // Use 'true' if your decimal point doesn't exist or isn't connected. Then, you only need to specify 7 segmentPins[]
 
-  cadenceDisplay.setDutyCycle(displayFrequency);
-  cadenceDisplay.setDigitPins(numOfDigits, digitPinsCadence);
-  cadenceDisplay.setRefreshRate(displayFrequency);
-  //cadenceDisplay.setDigitDelay(digitDelay);
-  cadenceDisplay.setCommonCathode();
-
+  sevseg.begin(hardwareConfig, numDigits, digitPins, segmentPins, resistorsOnSegments, updateWithDelays, leadingZeros, disableDecPoint);
+  sevseg.setBrightness(90);
+  
   // initialize the BLE hardware
   if ( !BLE.begin() ) {
     if (DEBUG) Serial.println("starting BLE failed!");
@@ -88,6 +64,7 @@ void loop() {
     if (DEBUG) Serial.print(peripheral.localName());
     
     if (peripheral.localName() != "powerMeterService") {
+      if (DEBUG) Serial.println("Wrong Local Name. returning.");
       return;
     }
 
@@ -194,23 +171,20 @@ void loop() {
           Serial.print(", C="); Serial.println(cadence);
         }
       }
+    } else {
+      if (DEBUG) Serial.println("Could not connect.");
     }
 
     // peripheral disconnected, start scanning again
     BLE.scanForUuid("1818");
   }
   else {  //if (peripheral) 
-    powerDisplay.write("Hi ");
-    powerDisplay.clearDisp();
-
-    resistanceDisplay.write("CAL");
-    resistanceDisplay.clearDisp();
-
-    cadenceDisplay.write("STR");
-    cadenceDisplay.clearDisp();
+    displayPowerResistanceCadence(0,0,0);
 
     if (DEBUG) Serial.println("bluetooth not connected.");
   }
   
-  //delay(500);
+  //delay(100);
+  sevseg.refreshDisplay(); 
+
 }
