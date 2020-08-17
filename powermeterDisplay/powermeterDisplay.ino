@@ -7,7 +7,7 @@ int counter = 0;
 
 const int DEBUG = 0;
 
-void displayPowerResistanceCadence (unsigned char power, unsigned char resistance, unsigned char cadence) {
+void displayPowerResistanceCadence (int power, int resistance, int cadence) {
   /*
    * Product Name: LED Digital Display Tube; 
    * Type: Common Cathode; Model: 3631AH
@@ -179,7 +179,7 @@ void loop() {
     BLE.scanForUuid("1818");
   }
   else {  //if (peripheral) 
-    displayPowerResistanceCadence(0,0,0);
+    displayPowerResistanceCadence(888,888,888);
 
     if (DEBUG) Serial.println("bluetooth not connected.");
   }
