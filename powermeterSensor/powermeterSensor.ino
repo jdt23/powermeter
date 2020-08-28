@@ -17,6 +17,8 @@ BLEUnsignedCharCharacteristic cadenceChar("2A5B", BLERead | BLENotify );
 
 int counter = 0;
 
+const int DEBUG = 0;
+
 // HX711 circuit wiring
 const int LOADCELL_DOUT_PIN = A7;
 const int LOADCELL_SCK_PIN = A6;
@@ -25,14 +27,69 @@ HX711 scale;
 float offset, calibrationFactor;
 float accelerationSampleRate, gyroscopeSampleRate;
 
-//unsigned long previousMillis = 0;
+struct Measurement {
+  float accumulator;
+  int samples;
+  unsigned long last_time;
+  unsigned long next_time;
+  BLEUnsignedCharCharacteristic bleuchar;
+  const unsigned long refreshInterval = 1000; // in milliseconds
+  
+  Measurement(BLEUnsignedCharCharacteristic _bleuchar) :
+    accumulator(0),
+    samples(0),
+    last_time(0),
+    next_time(0),
+    bleuchar(_bleuchar)
+    {}
+  void reset() {
+    accumulator = 0;
+    samples = 0;
+    last_time = 0;
+    next_time = 0;
+  }
+  void addMeasurement(float a) { 
+    accumulator += a;
+    samples++;
+  }
+  bool canGetMeasurement() {
+    return (millis() > next_time);
+  }
+  float getMeasurement() {
+    float retval = accumulator / samples;
+    last_time = millis();
+    next_time = last_time + refreshInterval;
+    accumulator = 0;
+    samples = 0;
+    return retval;
+  }
+};
+Measurement powerMeasurement(powerChar);
+Measurement resistanceMeasurement(resistanceChar);
+Measurement cadenceMeasurement(cadenceChar);
+    
+void setLED (int r, int g, int b) {
+  digitalWrite(LEDR, 1-r);
+  digitalWrite(LEDG, 1-g);
+  digitalWrite(LEDB, 1-b);
+}
 
 void setup() {
-  Serial.begin(9600);
+  if (DEBUG) Serial.begin(9600);
+  //HX711 setup
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
 
+  // initialize digital pin LED_BUILTIN as an output.
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(LEDR, OUTPUT);
+  pinMode(LEDG, OUTPUT);
+  pinMode(LEDB, OUTPUT);
+
+  setLED(0,0,1);
+  
+  //IMU setup
   if (!IMU.begin()) {
-    Serial.println("Failed to initialize IMU!");
+    if (DEBUG) Serial.println("Failed to initialize IMU!");
     while (1);
   }
 
@@ -42,13 +99,12 @@ void setup() {
   accelerationSampleRate = IMU.accelerationSampleRate();
   gyroscopeSampleRate    = IMU.gyroscopeSampleRate();
 
-
   //bluetooth setup
   if ( !BLE.begin() ) {
-    Serial.println("starting BLE failed!");
+    if (DEBUG) Serial.println("starting BLE failed!");
     while (1);
   } else {
-    Serial.println ("Bluetooth startup succeeded");
+    if (DEBUG) Serial.println ("Bluetooth startup succeeded");
   }
 
   BLE.setLocalName("powerMeterService");
@@ -59,7 +115,7 @@ void setup() {
   BLE.addService(powerMeterService);
 
   BLE.advertise();
-  Serial.println("Bluetooth device active, waiting for connections...");
+  if (DEBUG) Serial.println("Bluetooth device active, waiting for connections...");
 }
 
 float computeResistance ( const float &power, const float &rpm ) {
@@ -70,15 +126,15 @@ float computeResistance ( const float &power, const float &rpm ) {
   // Output ~= Speed2.5 / 10
 
   // Output ~= (Cadence - 35) * (Resistance/100)2.5 * 24
-  // (Resistance/100)2.5 = Output / (24 * Cadence-35)
+  // (Resistance/100)2.5 = Output / (24 * (Cadence-35))
   // Resistance = 100 * Output / (2.5*24*(cadence-35))
   float r = 5 * power / (3 * (rpm - 35));
   return r;
 }
 
 unsigned char float2uchar (const float &val, const char * name) {
-  unsigned char val_uchar = (unsigned char)val;
-  if (1) {
+  unsigned char val_uchar = (unsigned char)fabsf(val);
+  if (DEBUG) {
     Serial.print(name);
     Serial.print("=");
     Serial.print(val_uchar);
@@ -89,82 +145,82 @@ unsigned char float2uchar (const float &val, const char * name) {
   return val_uchar;
 }
 
-void writeToBluetooth (unsigned char power, unsigned char resistance, unsigned char cadence) {
-    powerChar.writeValue(power);
-    resistanceChar.writeValue(resistance);
-    cadenceChar.writeValue(cadence);
-}
-
 void loop() {
 
-  delay(1000);
+  setLED(1,0,0); // red
+  delay(100);
 
   //bluetooth stuff
   BLEDevice central = BLE.central();
 
   if (central) {
+    setLED(1,1,0); // yellow means central active but not connected yet
   
-    Serial.print("Connected to central: ");
-    Serial.print(central.address());
+    if (DEBUG) Serial.print("Connected to central: ");
+    if (DEBUG) Serial.print(central.address());
 
     unsigned char power_uchar=0, power_uchar_new=0;
     unsigned char resistance_uchar=0, resistance_uchar_new=0;
     unsigned char cadence_uchar=0, cadence_uchar_new=0;
+    float cadence=0, resistance=0, power=0;
+    int cadence_samples=0, resistance_samples=0, power_samples=0;
+
     
     while (central.connected()) {
-      
-      Serial.print("Counter = ");
-      Serial.print(counter++);
+      setLED(0,0,0); // turn leds off while connected
+
+      if (DEBUG) Serial.print("\nCounter = ");
+      if (DEBUG) Serial.print(counter++);
     
-      // get gyro_z
+      // to measure cadence, the gyroscope Z dimension tells you degrees/second
+      // which can easily be converted to RPM
       float gyro_x, gyro_y, gyro_z = 0;
       if (IMU.gyroscopeAvailable()) {
         IMU.readGyroscope(gyro_x, gyro_y, gyro_z);
-    
-        Serial.print("\tGyro=\t");
-        Serial.print(gyro_x);
-        Serial.print('\t');
-        Serial.print(gyro_y);
-        Serial.print('\t');
-        Serial.print(gyro_z);
+
+        if (DEBUG) {
+          Serial.print("\tGyro=\t");
+          Serial.print(gyro_x);
+          Serial.print('\t');
+          Serial.print(gyro_y);
+          Serial.print('\t');
+          Serial.print(gyro_z);
+        }
       } else {
-        Serial.print("gyro not available\t");
+        if (DEBUG) Serial.print("gyro not available\t");
       }
-      Serial.print("\t");
+      if (DEBUG) Serial.print("\t");
+
+      // gyro_z is in degrees/second.  one revolution is 360 degrees.
+      // rev/min = (deg/sec) * (60sec/1min) * (1rev/360deg)
+      // rev/min = (deg/sec) * (1/6)
+      float new_cadence = gyro_z / 6.0f;
+      new_cadence *= 1.15; // calibration factor. need to follow up here for lower cadences
+      cadenceMeasurement.addMeasurement(new_cadence);
       
-      /*
-        float accel_x, accel_y, accel_z = 0;
-        if (IMU.accelerationAvailable()) {
-        IMU.readAcceleration(accel_x, accel_y, accel_z);
-    
-        Serial.print("\tAccel=\t");
-        Serial.print(accel_x);
-        Serial.print('\t');
-        Serial.print(accel_y);
-        Serial.print('\t');
-        Serial.print(accel_z);
-        } else Serial.print("accel not available\t");
-      */
-      float GyZ, GyZ_Radians, cadence;
-      GyZ = gyro_z;
-      /* Time to do some maths */
-      //GyZ_Radians = -GyZ * (1 / 32.8) * (3.14 / 180); // Convert into radians / sec
-      cadence = -GyZ * 0.0051; // Convert into revs / sec
-    
       /* Get values from the strain gauges */
       //float reading = scale.read();
       //Serial.print("Scale Reading:\t"); Serial.println(reading);
-      float power = 100.0f; //XXX
+      float new_power = 100.0f; //XXX
+      powerMeasurement.addMeasurement(new_power);
     
-      cadence *= 10; // XXX temporarily inflate
-      float resistance = computeResistance(power, cadence);
-    
-      power_uchar_new      = float2uchar(power, "Power");
-      cadence_uchar_new    = float2uchar(cadence, "Cadence");
-      resistance_uchar_new = float2uchar(resistance, "Resistance");
+      float new_resistance = computeResistance(power, cadence);
+      resistanceMeasurement.addMeasurement(new_resistance);
 
-      //Serial.print("writing to bluetooth\n");
-      //writeToBluetooth(power_uchar, resistance_uchar, cadence_uchar);
+      if (powerMeasurement.canGetMeasurement()) {
+        power_uchar_new = float2uchar(powerMeasurement.getMeasurement(), "Power");
+      }
+      if (resistanceMeasurement.canGetMeasurement()) {
+        resistance_uchar_new = float2uchar(resistanceMeasurement.getMeasurement(), "Resistance");
+      }
+      if (cadenceMeasurement.canGetMeasurement()) {
+        cadence_uchar_new = float2uchar(cadenceMeasurement.getMeasurement(), "Cadence");
+      }
+      //power_uchar_new      = float2uchar(power, "Power");
+      //cadence_uchar_new    = float2uchar(cadence, "Cadence");
+      //resistance_uchar_new = float2uchar(resistance, "Resistance");
+
+      // only write new values if needed
       if (power_uchar_new != power_uchar) {
         power_uchar = power_uchar_new;
         powerChar.writeValue(power_uchar);
@@ -177,9 +233,15 @@ void loop() {
         cadence_uchar = cadence_uchar_new;
         cadenceChar.writeValue(cadence_uchar);
       }
-
+      
+      // add delay to prevent values from changing too quickly
+      delay(100);
     }
+    setLED(1,1,0); // yellow should only be on temporarily
+
   }
+  setLED(1,0,0); // red means not connected
+
   //Serial.println("");
   return;
 
