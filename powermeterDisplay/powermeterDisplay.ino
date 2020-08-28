@@ -16,7 +16,7 @@ void displayPowerResistanceCadence (int power, int resistance, int cadence) {
    */
 
   sevseg.setNumber(1000000*power + 1000*resistance + cadence);
-
+  sevseg.refreshDisplay(); 
 }
 
 
@@ -34,11 +34,11 @@ void setup() {
   bool updateWithDelaysIn = true;
   byte hardwareConfig = COMMON_CATHODE; 
   bool updateWithDelays = false; // Default 'false' is Recommended
-  bool leadingZeros = true; // Use 'true' if you'd like to keep the leading zeros
+  bool leadingZeros = false; // Use 'true' if you'd like to keep the leading zeros
   bool disableDecPoint = true; // Use 'true' if your decimal point doesn't exist or isn't connected. Then, you only need to specify 7 segmentPins[]
 
   sevseg.begin(hardwareConfig, numDigits, digitPins, segmentPins, resistorsOnSegments, updateWithDelays, leadingZeros, disableDecPoint);
-  sevseg.setBrightness(90);
+  sevseg.setBrightness(100);
   
   // initialize the BLE hardware
   if ( !BLE.begin() ) {
@@ -162,7 +162,12 @@ void loop() {
           cadence = newCadence;
         }
       
-        if (DEBUG) Serial.print(" Bytes read: "); Serial.print(powerBytesRead); Serial.print(resistanceBytesRead); Serial.println(cadenceBytesRead);
+        if (DEBUG) {
+          Serial.print(" Bytes read: "); 
+          Serial.print(powerBytesRead); 
+          Serial.print(resistanceBytesRead); 
+          Serial.println(cadenceBytesRead);
+        }
         
         displayPowerResistanceCadence (power, resistance, cadence);
         if (DEBUG) {
@@ -179,12 +184,11 @@ void loop() {
     BLE.scanForUuid("1818");
   }
   else {  //if (peripheral) 
-    displayPowerResistanceCadence(888,888,888);
+    displayPowerResistanceCadence(123,456,789);
 
     if (DEBUG) Serial.println("bluetooth not connected.");
   }
   
   //delay(100);
-  sevseg.refreshDisplay(); 
 
 }

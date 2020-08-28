@@ -34,7 +34,7 @@ struct Measurement {
   unsigned long next_time;
   BLEUnsignedCharCharacteristic bleuchar;
   const unsigned long refreshInterval = 1000; // in milliseconds
-  
+
   Measurement(BLEUnsignedCharCharacteristic _bleuchar) :
     accumulator(0),
     samples(0),
@@ -48,7 +48,7 @@ struct Measurement {
     last_time = 0;
     next_time = 0;
   }
-  void addMeasurement(float a) { 
+  void addMeasurement(float a) {
     accumulator += a;
     samples++;
   }
@@ -67,7 +67,7 @@ struct Measurement {
 Measurement powerMeasurement(powerChar);
 Measurement resistanceMeasurement(resistanceChar);
 Measurement cadenceMeasurement(cadenceChar);
-    
+
 void setLED (int r, int g, int b) {
   digitalWrite(LEDR, 1-r);
   digitalWrite(LEDG, 1-g);
@@ -86,7 +86,7 @@ void setup() {
   pinMode(LEDB, OUTPUT);
 
   setLED(0,0,1);
-  
+
   //IMU setup
   if (!IMU.begin()) {
     if (DEBUG) Serial.println("Failed to initialize IMU!");
@@ -155,7 +155,7 @@ void loop() {
 
   if (central) {
     setLED(1,1,0); // yellow means central active but not connected yet
-  
+
     if (DEBUG) Serial.print("Connected to central: ");
     if (DEBUG) Serial.print(central.address());
 
@@ -165,13 +165,13 @@ void loop() {
     float cadence=0, resistance=0, power=0;
     int cadence_samples=0, resistance_samples=0, power_samples=0;
 
-    
+
     while (central.connected()) {
       setLED(0,0,0); // turn leds off while connected
 
       if (DEBUG) Serial.print("\nCounter = ");
       if (DEBUG) Serial.print(counter++);
-    
+
       // to measure cadence, the gyroscope Z dimension tells you degrees/second
       // which can easily be converted to RPM
       float gyro_x, gyro_y, gyro_z = 0;
@@ -197,13 +197,13 @@ void loop() {
       float new_cadence = gyro_z / 6.0f;
       new_cadence *= 1.15; // calibration factor. need to follow up here for lower cadences
       cadenceMeasurement.addMeasurement(new_cadence);
-      
+
       /* Get values from the strain gauges */
       //float reading = scale.read();
       //Serial.print("Scale Reading:\t"); Serial.println(reading);
       float new_power = 100.0f; //XXX
       powerMeasurement.addMeasurement(new_power);
-    
+
       float new_resistance = computeResistance(power, cadence);
       resistanceMeasurement.addMeasurement(new_resistance);
 
@@ -233,7 +233,7 @@ void loop() {
         cadence_uchar = cadence_uchar_new;
         cadenceChar.writeValue(cadence_uchar);
       }
-      
+
       // add delay to prevent values from changing too quickly
       delay(100);
     }
