@@ -33,7 +33,7 @@ struct Measurement {
   unsigned long last_time;
   unsigned long next_time;
   BLEUnsignedCharCharacteristic bleuchar;
-  const unsigned long refreshInterval = 1000; // in milliseconds
+  const unsigned long refreshInterval = 1500; // in milliseconds
 
   Measurement(BLEUnsignedCharCharacteristic _bleuchar) :
     accumulator(0),
@@ -241,6 +241,7 @@ void loop() {
 
   }
   setLED(1,0,0); // red means not connected
+  delay(1000); // wait a second if not connected
 
   //Serial.println("");
   return;

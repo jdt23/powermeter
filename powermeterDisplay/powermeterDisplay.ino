@@ -7,6 +7,12 @@ int counter = 0;
 
 const int DEBUG = 0;
 
+void setLED (int r, int g, int b) {
+  digitalWrite(LEDR, 1-r);
+  digitalWrite(LEDG, 1-g);
+  digitalWrite(LEDB, 1-b);
+}
+
 void displayPowerResistanceCadence (int power, int resistance, int cadence) {
   /*
    * Product Name: LED Digital Display Tube; 
@@ -14,29 +20,33 @@ void displayPowerResistanceCadence (int power, int resistance, int cadence) {
    * Common Cathode: 12-9-8; Digital Display: 3 Digit; Digital Number: 3 Bit 7 Segment; Emitted Color: Red
    * Pin Number: 11; Continuous Forward Current: 20mA; Average Forward Voltage: 2V; Power Consumption: 36mW
    */
-
   sevseg.setNumber(1000000*power + 1000*resistance + cadence);
   sevseg.refreshDisplay(); 
 }
 
-
 void setup() {
   if (DEBUG) Serial.begin(9600);
 
-  byte segmentPins[] = {A0, 2,A7,A3,A2,A1,A6};
+  // initialize digital pin LED_BUILTIN as an output.
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(LEDR, OUTPUT);
+  pinMode(LEDG, OUTPUT);
+  pinMode(LEDB, OUTPUT);
 
+  setLED(0,0,1);
+
+  // set up LED
+  byte segmentPins[] = {A0, 2,A7,A3,A2,A1,A6};
   byte numDigits = 9;
   byte digitPins[] = { 3, 4, 5,  // power pins
                       11, 6, 7,  // resistance pins
                       8, 9, 10}; // cadence pins
-  
   bool resistorsOnSegments = true; 
   bool updateWithDelaysIn = true;
   byte hardwareConfig = COMMON_CATHODE; 
   bool updateWithDelays = false; // Default 'false' is Recommended
   bool leadingZeros = false; // Use 'true' if you'd like to keep the leading zeros
   bool disableDecPoint = true; // Use 'true' if your decimal point doesn't exist or isn't connected. Then, you only need to specify 7 segmentPins[]
-
   sevseg.begin(hardwareConfig, numDigits, digitPins, segmentPins, resistorsOnSegments, updateWithDelays, leadingZeros, disableDecPoint);
   sevseg.setBrightness(100);
   
@@ -56,10 +66,14 @@ void setup() {
 
 void loop() {
 
+  setLED(1,0,0); // red
+  //delay(100);
+
   // check if a peripheral has been discovered
   BLEDevice peripheral = BLE.available();
 
   if (peripheral) {
+    setLED(1,1,0); // yellow means peripheral active but not connected yet
     if (DEBUG) Serial.print("Bluetooth connected to ");
     if (DEBUG) Serial.print(peripheral.localName());
     
@@ -72,6 +86,7 @@ void loop() {
     BLE.stopScan();
 
     if (peripheral.connect()) {
+      setLED(0,1,0); 
       if (DEBUG) Serial.println (" Bluetooth connected.");
 
       // discover peripheral attributes
@@ -149,6 +164,7 @@ void loop() {
       cadenceChar.readValue(cadence);
       
       while (peripheral.connected()) {
+        setLED(0,0,0); 
         if (powerChar.valueUpdated()) {
           powerBytesRead = powerChar.readValue(newPower);
           power = newPower;
@@ -177,6 +193,7 @@ void loop() {
         }
       }
     } else {
+      setLED(0,1,1); 
       if (DEBUG) Serial.println("Could not connect.");
     }
 
@@ -184,9 +201,16 @@ void loop() {
     BLE.scanForUuid("1818");
   }
   else {  //if (peripheral) 
+    if (DEBUG) Serial.println("bluetooth not connected.");
+
     displayPowerResistanceCadence(123,456,789);
 
-    if (DEBUG) Serial.println("bluetooth not connected.");
+//    int battery = analogRead(A0);
+//    int batteryLevel = map(battery, 0, 1023, 0, 100);
+//    displayPowerResistanceCadence(0,battery,batteryLevel);
+    setLED(1,0,0);
+
+    //delay(100);
   }
   
   //delay(100);
