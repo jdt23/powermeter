@@ -7,6 +7,8 @@ int counter = 0;
 
 const int DEBUG = 0;
 
+const int BATTERY_PIN = A4;
+
 void setLED (int r, int g, int b) {
   digitalWrite(LEDR, 1-r);
   digitalWrite(LEDG, 1-g);
@@ -42,7 +44,7 @@ void setup() {
                       11, 6, 7,  // resistance pins
                       8, 9, 10}; // cadence pins
   bool resistorsOnSegments = true; 
-  bool updateWithDelaysIn = true;
+  //bool updateWithDelaysIn = true;
   byte hardwareConfig = COMMON_CATHODE; 
   bool updateWithDelays = false; // Default 'false' is Recommended
   bool leadingZeros = false; // Use 'true' if you'd like to keep the leading zeros
@@ -203,12 +205,16 @@ void loop() {
   else {  //if (peripheral) 
     if (DEBUG) Serial.println("bluetooth not connected.");
 
-    displayPowerResistanceCadence(123,456,789);
+    //displayPowerResistanceCadence(123,456,789);
 
-//    int battery = analogRead(A0);
-//    int batteryLevel = map(battery, 0, 1023, 0, 100);
-//    displayPowerResistanceCadence(0,battery,batteryLevel);
-    setLED(1,0,0);
+    int battery = analogRead(BATTERY_PIN);
+    int batteryLevel = map(battery, 0, 1023, 0, 100);
+    if (DEBUG) Serial.print("Battery: ");
+    if (DEBUG) Serial.print(battery);
+    if (DEBUG) Serial.print(", ");
+    if (DEBUG) Serial.println(batteryLevel);
+    displayPowerResistanceCadence(0,0,batteryLevel);
+    setLED(1,1,0);
 
     //delay(100);
   }
