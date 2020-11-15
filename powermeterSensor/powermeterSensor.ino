@@ -15,7 +15,7 @@ BLEUnsignedCharCharacteristic cadenceChar("2A5B", BLERead | BLENotify );
 // For IMU
 #include <Arduino_LSM9DS1.h>
 
-const float Radius = 0.2; //meters
+const float Radius = 0.15; //meters
 
 int counter = 0;
 
@@ -60,12 +60,12 @@ struct Measurement {
     return (millis() > next_time);
   }
   float getMeasurement() {
-//    if (DEBUG) {
-//      Serial.print("accumulator=");
-//      Serial.print(accumulator);
-//      Serial.print(" samples=");
-//      Serial.println(samples);
-//    }
+    if (DEBUG) {
+      Serial.print("accumulator=");
+      Serial.print(accumulator);
+      Serial.print(" samples=");
+      Serial.println(samples);
+    }
     float retval = accumulator / samples;
     last_time = millis();
     next_time = last_time + refreshInterval;
@@ -74,9 +74,9 @@ struct Measurement {
     return retval;
   }
 };
-Measurement powerMeasurement(powerChar, 1000);
-Measurement resistanceMeasurement(resistanceChar, 1000);
-Measurement cadenceMeasurement(cadenceChar, 1000);
+Measurement powerMeasurement(powerChar, 2000);
+Measurement resistanceMeasurement(resistanceChar, 2000);
+Measurement cadenceMeasurement(cadenceChar, 2000);
 
 void setLED (int r, int g, int b) {
   digitalWrite(LEDR, 1-r);
@@ -88,8 +88,8 @@ void setup() {
   if (DEBUG) Serial.begin(9600);
   //HX711 setup
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
-  scale.set_offset(17000);
-  scale.set_scale(2280);
+  scale.set_offset(142000);
+  scale.set_scale(1);
 
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(LED_BUILTIN, OUTPUT);
@@ -257,7 +257,7 @@ void loop() {
       }
 
       // add delay to prevent values from changing too quickly
-      //delay(100);
+      delay(100);
     }
     setLED(1,1,0); // yellow should only be on temporarily
 
