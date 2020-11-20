@@ -15,7 +15,7 @@ BLEUnsignedCharCharacteristic cadenceChar("2A5B", BLERead | BLENotify );
 // For IMU
 #include <Arduino_LSM9DS1.h>
 
-const float Radius = 0.10; //meters
+const float Radius = 0.17; //meters
 
 int counter = 0;
 
@@ -146,7 +146,7 @@ float computeResistance ( const float &power, const float &rpm ) {
 
   // https://www.reddit.com/r/pelotoncycle/comments/gwpyfw/diy_peloton_resistance_output/
   //  $Resistance = (145*($Power/(11.29*($Cadence-22.5)^1.25))^(.4651))
-  //  float r = (145*power/(11.29*(rpm-22.5)^1.25))^0.4651))
+  float r = (145*pow(power/(11.29f*pow(rpm-22.5f,1.25f)),(0.4651)));
   
   // https://www.reddit.com/r/pelotoncycle/wiki/index/faq/bikecalibration
   
@@ -158,7 +158,8 @@ float computeResistance ( const float &power, const float &rpm ) {
   // Output ~= (Cadence - 35) * (Resistance/100)2.5 * 24
   // (Resistance/100)2.5 = Output / (24 * (Cadence-35))
   // Resistance = 100 * Output / (2.5*24*(cadence-35))
-  float r = 5 * power / (3 * (rpm - 35));
+  //float r = 5 * power / (3 * (rpm - 35));
+  
   return fmaxf(r,0);
 }
 
