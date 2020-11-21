@@ -146,7 +146,7 @@ float computeResistance ( const float &power, const float &rpm ) {
 
   // https://www.reddit.com/r/pelotoncycle/comments/gwpyfw/diy_peloton_resistance_output/
   //  $Resistance = (145*($Power/(11.29*($Cadence-22.5)^1.25))^(.4651))
-  float r = (145*pow(power/(11.29f*pow(rpm-22.5f,1.25f)),(0.4651)));
+  float r = (145*pow(power/(11.29f*pow((rpm-22.5f),1.25f)),(0.4651)));
   
   // https://www.reddit.com/r/pelotoncycle/wiki/index/faq/bikecalibration
   
