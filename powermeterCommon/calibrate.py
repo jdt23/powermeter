@@ -10,16 +10,17 @@ plt.scatter(knownPtsPowerMin, knownPtsResistance)
 plt.scatter(knownPtsPowerMax, knownPtsResistance)
 
 xlist = np.arange(0,300)
-for cadence in range (80,110,10):
+for cadence in range (50,111,10):
     # Option 1: https://www.reddit.com/r/pelotoncycle/comments/gwpyfw/diy_peloton_resistance_output/
     # $Resistance = (145*($Power/(11.29*  ($Cadence-22.5)^1.25)  )^(.4651))
     ylist = (145*pow(xlist/(11.29*pow((cadence-22.5),1.25)),(.4651)))
     # Option 2: https://www.reddit.com/r/pelotoncycle/comments/b0bulz/how_the_peloton_bike_calculates_output_and_speed/
     # Resistance = 100 * Output / (2.5*24*(cadence-35))
     zlist = 100 * xlist / (2.5*24*(cadence-35))
-    plt.plot(xlist,ylist)
+    plt.plot(xlist,ylist, label='%drpm' % (cadence))
     #plt.plot(xlist,zlist)
 plt.xlabel("Power")
 plt.ylabel("Resistance")
 plt.title('Bike Calibration')
+plt.legend()
 plt.show()
