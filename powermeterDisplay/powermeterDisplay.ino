@@ -156,9 +156,10 @@ void loop() {
         peripheral.disconnect();
         return;
       }
-      
-      unsigned char power=68, resistance=69, cadence=70;
-      unsigned char newPower=68, newResistance=69, newCadence=70;
+
+      unsigned short power=68, newPower=68;
+      unsigned char resistance=69, newResistance=69;
+      unsigned char cadence=70, newCadence=70;
       int powerBytesRead=7, resistanceBytesRead=8, cadenceBytesRead=9;
 
       powerChar.readValue(power);

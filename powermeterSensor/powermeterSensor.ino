@@ -7,9 +7,9 @@
 #include <ArduinoBLE.h>
 
 BLEService powerMeterService("1818");
-BLEUnsignedCharCharacteristic powerChar("2A63", BLERead | BLENotify );
-BLEUnsignedCharCharacteristic resistanceChar("2AD6", BLERead | BLENotify );
-BLEUnsignedCharCharacteristic cadenceChar("2A5B", BLERead | BLENotify );
+BLEUnsignedShortCharacteristic powerChar("2A63", BLERead | BLENotify );
+BLEUnsignedCharCharacteristic  resistanceChar("2AD6", BLERead | BLENotify );
+BLEUnsignedCharCharacteristic  cadenceChar("2A5B", BLERead | BLENotify );
 
 // Arduino_LSM9DS1 - Version: Latest
 // For IMU
@@ -37,24 +37,22 @@ struct Measurement {
   int samples;
   unsigned long last_time;
   unsigned long next_time;
-  BLEUnsignedCharCharacteristic bleuchar;
   unsigned int refreshInterval; // in milliseconds
   MeasurementMethod method;
 
-  Measurement(BLEUnsignedCharCharacteristic _bleuchar, const unsigned int _refreshInterval, MeasurementMethod _method) :
+  Measurement(const unsigned int _refreshInterval, MeasurementMethod _method) :
     accumulator(0),
     samples(0),
     last_time(0),
     next_time(0),
-    bleuchar(_bleuchar),
     refreshInterval(_refreshInterval),
     method(_method)
     {}
   void reset() {
     accumulator = 0;
     samples = 0;
-    last_time = 0;
-    next_time = 0;
+    last_time = millis();
+    next_time = last_time + refreshInterval;
   }
   void addMeasurement(float a) {
     if (method==AVERAGE)
@@ -73,21 +71,20 @@ struct Measurement {
       Serial.print(" samples=");
       Serial.println(samples);
     }
+    if (samples == 0)
+      return NAN;
     float retval = NAN;
     if (method==AVERAGE)
       retval= accumulator / samples;
     else if (method==MAX)
       retval = accumulator;
-    last_time = millis();
-    next_time = last_time + refreshInterval;
-    accumulator = 0;
-    samples = 0;
+    reset();
     return retval;
   }
 };
-Measurement powerMeasurement(powerChar, 2000, MAX);
-Measurement resistanceMeasurement(resistanceChar, 2000, MAX);
-Measurement cadenceMeasurement(cadenceChar, 2000, AVERAGE);
+Measurement powerMeasurement(2000, AVERAGE);
+Measurement resistanceMeasurement(2000, AVERAGE);
+Measurement cadenceMeasurement(2000, AVERAGE);
 
 void setLED (int r, int g, int b) {
   digitalWrite(LEDR, 1-r);
@@ -99,7 +96,14 @@ void setup() {
   if (DEBUG) Serial.begin(9600);
   //HX711 setup
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
-  scale.set_offset(136200);
+  //scale.set_offset(1);
+  if (DEBUG) Serial.println("Calibrating scale.");
+  float offset = scale.get_units(20);
+  offset = scale.get_units(10);
+  if (DEBUG) Serial.print("Setting offset to ");
+  if (DEBUG) Serial.println(offset);
+  scale.set_offset(offset);
+  //scale.set_offset(136200);
   // 1 pound = 4.4482216153 Newtons
   // scale factor = reading / (N) = reading / (lbs * 4.4482216153)
   //scale.set_scale(1);
@@ -146,7 +150,7 @@ float computeResistance ( const float &power, const float &rpm ) {
 
   // https://www.reddit.com/r/pelotoncycle/comments/gwpyfw/diy_peloton_resistance_output/
   //  $Resistance = (145*($Power/(11.29*($Cadence-22.5)^1.25))^(.4651))
-  float r = (145*pow(power/(11.29f*pow((rpm-22.5f),1.25f)),(0.4651)));
+  float r = (145*pow(power/(11.29f*pow(max( (rpm-22.5f),1 ),1.25f)),(0.4651)));
   
   // https://www.reddit.com/r/pelotoncycle/wiki/index/faq/bikecalibration
   
@@ -159,8 +163,26 @@ float computeResistance ( const float &power, const float &rpm ) {
   // (Resistance/100)2.5 = Output / (24 * (Cadence-35))
   // Resistance = 100 * Output / (2.5*24*(cadence-35))
   //float r = 5 * power / (3 * (rpm - 35));
-  
+
+  if (DEBUG) {
+    Serial.print("computing resistance: p  =");  Serial.println(power);
+    Serial.print("computing resistance: rpm=");  Serial.println(rpm);
+    Serial.print("computing resistance: r  =");  Serial.println(r);
+  }
   return fmaxf(r,0);
+}
+
+unsigned short float2ushort (const float &val, const char * name, const float & maxval) {
+  unsigned short val_uchar = (unsigned short)fabsf(val);
+  if (DEBUG) {
+    Serial.print(name);
+    Serial.print("=");
+    Serial.print(val_uchar);
+    Serial.print(",");
+    Serial.print(val);
+    Serial.print("\t");
+  }
+  return min(val_uchar, maxval);
 }
 
 unsigned char float2uchar (const float &val, const char * name, const float & maxval) {
@@ -190,9 +212,9 @@ void loop() {
     if (DEBUG) Serial.print("Connected to central: ");
     if (DEBUG) Serial.print(central.address());
 
-    unsigned char power_uchar=0, power_uchar_new=0;
-    unsigned char resistance_uchar=0, resistance_uchar_new=0;
-    unsigned char cadence_uchar=0, cadence_uchar_new=0;
+    unsigned short power_short=0, power_short_new=0;
+    unsigned char  resistance_char=0, resistance_char_new=0;
+    unsigned char  cadence_char=0, cadence_char_new=0;
 
     while (central.connected() || DEBUG) {
       setLED(0,0,0); // turn leds off while connected
@@ -239,35 +261,35 @@ void loop() {
       //   angular_velocity should be in radians/second
       //   rad/sec = (deg/sec) * (3.14159/180)(rad/deg)
       // 1Watt = 1Newton-meter per second
-      float new_power = fabsf( Radius * reading * angular_velocity*3.14159/180  ) ;
+      float new_power = fabsf( Radius * fabsf(reading) * angular_velocity*3.1415926535/180  );
       powerMeasurement.addMeasurement(new_power);
-
-      float new_resistance = computeResistance(new_power, new_cadence);
-      resistanceMeasurement.addMeasurement(new_resistance);
 
       // get new measurements if it's time to
       if (powerMeasurement.canGetMeasurement()) {
-        power_uchar_new = float2uchar(powerMeasurement.getMeasurement(), "Power", 255);
+        power_short_new = float2ushort(powerMeasurement.getMeasurement(), "Power", 999);
       }
-      if (resistanceMeasurement.canGetMeasurement()) {
-        resistance_uchar_new = float2uchar(resistanceMeasurement.getMeasurement(), "Resistance", 99);
-      }
-      if (cadenceMeasurement.canGetMeasurement()) {
-        cadence_uchar_new = float2uchar(cadenceMeasurement.getMeasurement(), "Cadence", 250);
+      // only write new values if needed
+      if (power_short_new != power_short) {
+        power_short = power_short_new;
+        powerChar.writeValue(power_short);
       }
 
-      // only write new values if needed
-      if (power_uchar_new != power_uchar) {
-        power_uchar = power_uchar_new;
-        powerChar.writeValue(power_uchar);
+      if (cadenceMeasurement.canGetMeasurement()) {
+        cadence_char_new = float2uchar(cadenceMeasurement.getMeasurement(), "Cadence", 250);
       }
-      if (resistance_uchar_new != resistance_uchar) {
-        resistance_uchar = resistance_uchar_new;
-        resistanceChar.writeValue(resistance_uchar);
+      if (cadence_char_new != cadence_char) {
+        cadence_char = cadence_char_new;
+        cadenceChar.writeValue(cadence_char);
       }
-      if (cadence_uchar_new != cadence_uchar) {
-        cadence_uchar = cadence_uchar_new;
-        cadenceChar.writeValue(cadence_uchar);
+
+      float new_resistance = computeResistance(power_short, cadence_char);
+      resistanceMeasurement.addMeasurement(new_resistance);
+      if (resistanceMeasurement.canGetMeasurement()) {
+        resistance_char_new = float2uchar(resistanceMeasurement.getMeasurement(), "Resistance", 99);
+      }
+      if (resistance_char_new != resistance_char) {
+        resistance_char = resistance_char_new;
+        resistanceChar.writeValue(resistance_char);
       }
 
       // add delay to prevent values from changing too quickly
