@@ -29,7 +29,7 @@ Power meters measure the amount of force you exert on the bike crank.  This uses
 
 When a strain gauge is stressed, the resistance changes.  You can read the voltage across that resistor to detect the amount of change.  The problem is that this is a very noisy system, so people typically use a [Wheatstone Bridge](https://en.wikipedia.org/wiki/Wheatstone_bridge) circuit.
 
-![Wheatstone Bridge](https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/Wheatstonebridge.svg/600px-Wheatstonebridge.svg.png)
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/Wheatstonebridge.svg/600px-Wheatstonebridge.svg.png" alt="Wheatstone Bridge" width="200"/>
 
 In a Wheatstone Bridge such as the one in the figure above, you can apply a known voltage across A and C, then measure the output voltage across B and D.  If you apply 4 strain gauges on the bike crank in the right places, you can get it so an increase in resistance in R1 will also result in a reduction in resistance in R2, amplifying the change while introducing some redundancy (which is good).
 
@@ -37,7 +37,7 @@ In a Wheatstone Bridge such as the one in the figure above, you can apply a know
 
 The resistance change from the strain gauges is still very small, so we need to amplify it.  To do that, most people use an [HX711](https://cdn.sparkfun.com/datasheets/Sensors/ForceFlex/hx711_english.pdf) circuit such as the one below. 
 
-![hx711 image](./powermeterCommon/HX711_circuit.jpg)
+<img src="./powermeterCommon/HX711_circuit.jpg" alt="hx711 image"/>
 
 This circuit is fairly easy to use, cheap, and has a well supported [library](https://github.com/bogde/HX711) to simplify usage.
 
