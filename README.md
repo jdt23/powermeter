@@ -65,14 +65,13 @@ I skipped over calibrating and scaling the readings off the HX711, but it's rela
 
 ### Resistance
 
-Now this is the hard part.  Peloton listed official (Power,Resistance,Cadence) triples [here](https://www.reddit.com/r/pelotoncycle/wiki/index/faq/bikecalibration).  A nice user put those datapoints into a regression script and came up with equations [here](https://www.reddit.com/r/pelotoncycle/comments/gwpyfw/diy_peloton_resistance_output/).  
+Now this is the hard part.  Peloton listed official (Power,Resistance,Cadence) triples [here](https://www.reddit.com/r/pelotoncycle/wiki/index/faq/bikecalibration).  A nice user put those datapoints into a regression script and came up with equations [here](https://www.reddit.com/r/pelotoncycle/comments/gwpyfw/diy_peloton_resistance_output/):
 
-
-![](https://latex.codecogs.com/svg.latex?\Large&space;r=145\frac{Power}{11.29 * (Cadence - 22.5)} )
+![](https://latex.codecogs.com/svg.latex?\Large&space;r=145\left(\frac{Power}{11.29(Cadence-22.5)^{1.25}}\right)^{0.4651})
 
 I plotted the sample points and verified the equations seem to work in [this script](./powermeterCommon/calibrate.py).
 
-<img src="./powermeterCommon/calibrate.png" alt="plot of known datapoints and equations" width="400"/>
+<img src="./powermeterCommon/calibrate.png" alt="plot of known datapoints and equations" width="500"/>
 
 So I just plugged in those equations, fixed up for cases where it would fall below zero and produce NaNs, and boom, done.
 
@@ -84,7 +83,13 @@ Cadence is easily sensed using the IMU on the Nano 33 BLE.  There's a simple `re
 
 ### Power supply
 
-A key requirement is to have a power supply that is cabable of provided sustained current.  I initially started with some button batteries, but those would only last about 10 minutes before they started giving bogus numbers as a result of insufficient voltage to the chip.  Because of that, I moved to using 4xAAA rechargeable batteries.  This makes the cases slightly larger, but I believe they're still reasonably sized.
+A key requirement is to have a power supply that is cabable of providing sustained current.  I initially started with some button batteries, but those would only last about 10 minutes before they started giving bogus numbers as a result of insufficient voltage to the chip.  Because of that, I moved to using 4xAAA rechargeable batteries.  This makes the cases slightly larger, but I believe they're still reasonably sized.
+
+### Measurements
+
+Any measurement is going to have some noise to it.  To add some hysteresis, I created a `Measurement` struct that can take a `refreshInterval` (in milliseconds) and a way to reduce the results either via averaging or taking the max of a bunch of samples.  
+
+In practice, I settled on about 2 seconds of samples, which ended up being about 20 samples.  For power, I expected to have to use max, but ended up using averaging, similar to cadence and resistance.
 
 ## powermeterDisplay
 
