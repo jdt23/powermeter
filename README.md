@@ -45,11 +45,36 @@ This circuit is fairly easy to use, cheap, and has a well supported [library](ht
 
 #### Computing Force
 
-(TODO: discuss calibration, scaling, then force computation)
+The instantaneous power of an angularly accelerating body is the torque ($&tau$) times the angular velocity ($&omega$).
+
+![](https://latex.codecogs.com/svg.latex?\Large&space;P=\tau\omega)
+
+Tau is just Force x Distance, so we get:
+
+![](https://latex.codecogs.com/svg.latex?\Large&space;P=Fr\omega)
+
+We'll get the force from the HX711, after calibrating and scaling.  r is the radius of the bike crank.  Angular velocity here is expected in radians/second, and the Arduino gives it to you in degrees/second, so we have to remember to multiply by a scale factor.  2pi radians is 360 degrees, so you multiply your dps by pi/180
+
+![](https://latex.codecogs.com/svg.latex?\Large&space;P=Fr\omega\frac{\pi}{180})
+
+Done.  
+
+I skipped over calibrating and scaling the readings off the HX711, but it's relatively straightforward.  I assume zero weight when turning on the sensor, and use the first few seconds to read the neutral scale reading. That becomes the offset you pass to the `scale.set_offset()` function.  Then, I put a known weight (5 lbs in my case) on the pedal, and read the scale.  Each pound is 4.448 Newtons, so I set the scale factor to the reading divided by the weight I used times 4.448
+
+![](https://latex.codecogs.com/svg.latex?\Large&space;scaleFactor=\frac{scaleReading}{(5lbs)(4.448\frac{N}{lb})})
 
 ### Resistance
 
-(TODO)
+Now this is the hard part.  Peloton listed official (Power,Resistance,Cadence) triples [here](https://www.reddit.com/r/pelotoncycle/wiki/index/faq/bikecalibration).  A nice user put those datapoints into a regression script and came up with equations [here](https://www.reddit.com/r/pelotoncycle/comments/gwpyfw/diy_peloton_resistance_output/).  
+
+
+![](https://latex.codecogs.com/svg.latex?\Large&space;r=145\frac{Power}{11.29 * (Cadence - 22.5)} )
+
+I plotted the sample points and verified the equations seem to work in [this script](./powermeterCommon/calibrate.py).
+
+<img src="./powermeterCommon/calibrate.png" alt="plot of known datapoints and equations" width="400"/>
+
+So I just plugged in those equations, fixed up for cases where it would fall below zero and produce NaNs, and boom, done.
 
 ### Cadence
 
