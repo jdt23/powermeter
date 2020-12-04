@@ -132,7 +132,7 @@ void setup() {
     if (DEBUG) Serial.println("starting BLE failed!");
     setLED(1,1,1); // white
     delay(1000);
-  } 
+  }
   if (DEBUG) Serial.println ("Bluetooth startup succeeded");
 
   BLE.setLocalName("powerMeterService");
@@ -151,9 +151,9 @@ float computeResistance ( const float &power, const float &rpm ) {
   // https://www.reddit.com/r/pelotoncycle/comments/gwpyfw/diy_peloton_resistance_output/
   //  $Resistance = (145*($Power/(11.29*($Cadence-22.5)^1.25))^(.4651))
   float r = (145*pow(power/(11.29f*pow(max( (rpm-22.5f),1 ),1.25f)),(0.4651)));
-  
+
   // https://www.reddit.com/r/pelotoncycle/wiki/index/faq/bikecalibration
-  
+
   // https://www.reddit.com/r/pelotoncycle/comments/b0bulz/how_the_peloton_bike_calculates_output_and_speed/
   // Output ~= (Cadence - 35) * (Resistance/100)2.5 * 24
   // Speed ~= (Cadence - 35)0.4 * (Resistance/100) * 9 + 0.4
@@ -262,7 +262,7 @@ void loop() {
       //   angular_velocity should be in radians/second
       //   rad/sec = (deg/sec) * (3.14159/180)(rad/deg)
       // 1Watt = 1Newton-meter per second
-      float new_power = fabsf( Radius * fabsf(reading) * angular_velocity*3.1415926535/180  );
+      float new_power = fabsf( Radius * fabsf(reading) * angular_velocity * 3.1415926535 / 180 );
       // HACK: divide power by 2. hand wave something about measuring power on one of two pedals
       new_power /= 2.0f;
       powerMeasurement.addMeasurement(new_power);
@@ -307,7 +307,7 @@ void loop() {
   if (DEBUG) {
     int battery = analogRead(BATTERY_PIN);
     int batteryLevel = map(battery, 0, 1023, 0, 100);
-    Serial.print("Battery: "); 
+    Serial.print("Battery: ");
     Serial.print(batteryLevel);
     Serial.println("\%");
   }
