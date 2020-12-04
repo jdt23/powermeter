@@ -173,7 +173,7 @@ float computeResistance ( const float &power, const float &rpm ) {
 }
 
 unsigned short float2ushort (const float &val, const char * name, const float & maxval) {
-  unsigned short val_uchar = (unsigned short)fabsf(val);
+  unsigned short val_uchar = (unsigned short)fabsf(val+0.5f);// 0.5 for rounding
   if (DEBUG) {
     Serial.print(name);
     Serial.print("=");
@@ -186,7 +186,7 @@ unsigned short float2ushort (const float &val, const char * name, const float & 
 }
 
 unsigned char float2uchar (const float &val, const char * name, const float & maxval) {
-  unsigned char val_uchar = (unsigned char)fabsf(val);
+  unsigned char val_uchar = (unsigned char)fabsf(val+0.5f);// 0.5 for rounding
   if (DEBUG) {
     Serial.print(name);
     Serial.print("=");
@@ -247,7 +247,8 @@ void loop() {
       //float angular_velocity = sqrtf(gyro_x*gyro_x + gyro_y*gyro_y + gyro_z*gyro_z);
       float angular_velocity = fabsf(gyro_z); // this is what it used to be, when i needed the 1.15x
       float new_cadence = (angular_velocity) / 6.0f;
-      new_cadence *= 1.1667; // calibration factor. need to follow up here for lower cadences
+      // HACK: not sure why we need to multiply by (7/6), but doing this matches my wahoo meter.
+      new_cadence *= (7/6);
       cadenceMeasurement.addMeasurement(new_cadence);
 
       /* Get values from the strain gauges */
@@ -262,6 +263,8 @@ void loop() {
       //   rad/sec = (deg/sec) * (3.14159/180)(rad/deg)
       // 1Watt = 1Newton-meter per second
       float new_power = fabsf( Radius * fabsf(reading) * angular_velocity*3.1415926535/180  );
+      // HACK: divide power by 2. hand wave something about measuring power on one of two pedals
+      new_power /= 2.0f;
       powerMeasurement.addMeasurement(new_power);
 
       // get new measurements if it's time to
