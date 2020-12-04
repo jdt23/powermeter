@@ -164,7 +164,7 @@ And here's a picture of the same thing in real life:
 
 <img src="./powermeterCommon/displayCircuitBoard.jpeg" alt="display circuit board" width="400"/>
 
-Here's the final case I settled on, about about 10 attempts.
+Here's the final case I settled on, after about 10 attempts.
 
 <img src="./powermeterCommon/displayCase.jpeg" alt="display case" width="400"/>
 
