@@ -1,3 +1,5 @@
+// make sure to set MAXNUMDIGITS to 9 in your local copy. Default is 8 digits
+// and defining it here doesn't seem to work
 #include <SevSeg.h>
 SevSeg sevseg;
 
@@ -9,10 +11,23 @@ const int DEBUG = 0;
 
 const int BATTERY_PIN = A4;
 
+// inputs are binary ints. either 0 or 1.
+// but need to invert from the way I expect since high is off and low is on
 void setLED (int r, int g, int b) {
   digitalWrite(LEDR, 1-r);
   digitalWrite(LEDG, 1-g);
   digitalWrite(LEDB, 1-b);
+}
+
+// not using this function yet, as it screws up timing for the digits. 
+void removeLeadingZeros(int val, int hundredsPin, int tensPin) {
+  // common cathode, so HIGH is off
+  if (val < 100) {
+    digitalWrite(hundredsPin, HIGH);
+  }
+  if (val < 10) {
+    digitalWrite(tensPin, HIGH);
+  }
 }
 
 void displayPowerResistanceCadence (int power, int resistance, int cadence) {
@@ -22,8 +37,12 @@ void displayPowerResistanceCadence (int power, int resistance, int cadence) {
    * Common Cathode: 12-9-8; Digital Display: 3 Digit; Digital Number: 3 Bit 7 Segment; Emitted Color: Red
    * Pin Number: 11; Continuous Forward Current: 20mA; Average Forward Voltage: 2V; Power Consumption: 36mW
    */
+
   sevseg.setNumber(1000000*power + 1000*resistance + cadence);
-  sevseg.refreshDisplay(); 
+//  removeLeadingZeros(power, 3, 4);
+//  removeLeadingZeros(resistance, 11, 6);
+//  removeLeadingZeros(cadence, 8, 9);
+  sevseg.refreshDisplay();
 }
 
 void setup() {
@@ -51,7 +70,7 @@ void setup() {
   bool disableDecPoint = true; // Use 'true' if your decimal point doesn't exist or isn't connected. Then, you only need to specify 7 segmentPins[]
   sevseg.begin(hardwareConfig, numDigits, digitPins, segmentPins, resistorsOnSegments, updateWithDelays, leadingZeros, disableDecPoint);
   sevseg.setBrightness(100);
-  
+
   // initialize the BLE hardware
   if ( !BLE.begin() ) {
     if (DEBUG) Serial.println("starting BLE failed!");
@@ -63,7 +82,7 @@ void setup() {
   // start scanning for peripherals
   BLE.scanForUuid("1818");
 
-  //BLE.debug(Serial); 
+  //BLE.debug(Serial);
 }
 
 void loop() {
@@ -78,7 +97,7 @@ void loop() {
     setLED(1,1,0); // yellow means peripheral active but not connected yet
     if (DEBUG) Serial.print("Bluetooth connected to ");
     if (DEBUG) Serial.print(peripheral.localName());
-    
+
     if (peripheral.localName() != "powerMeterService") {
       if (DEBUG) Serial.println("Wrong Local Name. returning.");
       return;
@@ -88,7 +107,7 @@ void loop() {
     BLE.stopScan();
 
     if (peripheral.connect()) {
-      setLED(0,1,0); 
+      setLED(0,1,0);
       if (DEBUG) Serial.println (" Bluetooth connected.");
 
       // discover peripheral attributes
@@ -100,11 +119,11 @@ void loop() {
         peripheral.disconnect();
         return;
       }
-      
+
       //int characteristicCount = peripheral.characteristicCount();
       //Serial.print(characteristicCount);
       //Serial.println(" characteristics discovered");
-      
+
       BLECharacteristic powerChar = peripheral.characteristic("2A63");
       BLECharacteristic resistanceChar = peripheral.characteristic("2AD6");
       BLECharacteristic cadenceChar = peripheral.characteristic("2A5B");
@@ -124,7 +143,7 @@ void loop() {
         peripheral.disconnect();
         return;
       }
-      
+
       // subscribe to the resistanceChar characteristic
       if (DEBUG) Serial.println("Subscribing to resistanceChar ...");
       if (!resistanceChar) {
@@ -157,17 +176,17 @@ void loop() {
         return;
       }
 
-      unsigned short power=68, newPower=68;
-      unsigned char resistance=69, newResistance=69;
-      unsigned char cadence=70, newCadence=70;
-      int powerBytesRead=7, resistanceBytesRead=8, cadenceBytesRead=9;
+      unsigned short power = 68, newPower = 68;
+      unsigned char resistance = 69, newResistance = 69;
+      unsigned char cadence = 70, newCadence = 70;
+      int powerBytesRead = 7, resistanceBytesRead = 8, cadenceBytesRead = 9;
 
       powerChar.readValue(power);
       resistanceChar.readValue(resistance);
       cadenceChar.readValue(cadence);
-      
+
       while (peripheral.connected()) {
-        setLED(0,0,0); 
+        setLED(0,0,0);
         if (powerChar.valueUpdated()) {
           powerBytesRead = powerChar.readValue(newPower);
           power = newPower;
@@ -180,14 +199,14 @@ void loop() {
           cadenceBytesRead = cadenceChar.readValue(newCadence);
           cadence = newCadence;
         }
-      
+
         if (DEBUG) {
-          Serial.print(" Bytes read: "); 
-          Serial.print(powerBytesRead); 
-          Serial.print(resistanceBytesRead); 
+          Serial.print(" Bytes read: ");
+          Serial.print(powerBytesRead);
+          Serial.print(resistanceBytesRead);
           Serial.println(cadenceBytesRead);
         }
-        
+
         displayPowerResistanceCadence (power, resistance, cadence);
         if (DEBUG) {
           Serial.print(" P="); Serial.print(power);
@@ -196,14 +215,14 @@ void loop() {
         }
       }
     } else {
-      setLED(0,1,1); 
+      setLED(0,1,1);
       if (DEBUG) Serial.println("Could not connect.");
     }
 
     // peripheral disconnected, start scanning again
     BLE.scanForUuid("1818");
   }
-  else {  //if (peripheral) 
+  else {  //if (peripheral)
     if (DEBUG) Serial.println("bluetooth not connected.");
 
     //displayPowerResistanceCadence(123,456,789);
@@ -219,7 +238,7 @@ void loop() {
 
     //delay(100);
   }
-  
+
   //delay(100);
 
 }
