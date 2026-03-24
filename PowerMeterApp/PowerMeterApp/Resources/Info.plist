@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>PowerMeter connects to your cycling power sensor via Bluetooth to display real-time power, cadence, and resistance data.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>PowerMeter connects to your cycling power sensor via Bluetooth.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>PowerMeter reads your heart rate from Apple Watch to display it during your ride.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>PowerMeter saves your cycling workouts including power, cadence, and heart rate data to Apple Health.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+	</array>
+</dict>
+</plist>
