@@ -24,8 +24,6 @@ class BLEManager: NSObject, ObservableObject {
     private let resistanceUUID = CBUUID(string: "2AD6")
     private let cadenceUUID = CBUUID(string: "2A5B")
 
-    private let targetDeviceName = "powerMeterService"
-
     override init() {
         super.init()
         centralManager = CBCentralManager(delegate: self, queue: nil)
@@ -34,7 +32,11 @@ class BLEManager: NSObject, ObservableObject {
     func startScanning() {
         guard centralManager.state == .poweredOn else { return }
         connectionState = .scanning
-        centralManager.scanForPeripherals(withServices: [serviceUUID], options: nil)
+        // Allow duplicates so we keep getting advertisements even for already-seen peripherals
+        centralManager.scanForPeripherals(
+            withServices: [serviceUUID],
+            options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
+        )
     }
 
     func stopScanning() {
@@ -63,13 +65,15 @@ extension BLEManager: CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
                          advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        let name = peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? ""
-        guard name == targetDeviceName else { return }
-
+        // Connect to any peripheral advertising the Cycling Power Service (1818).
+        // The sensor is the only device that will advertise this custom service.
+        // Name may not be available in advertisement data on iOS, so don't filter by it.
         self.peripheral = peripheral
         centralManager.stopScan()
         connectionState = .connecting
-        centralManager.connect(peripheral, options: nil)
+        centralManager.connect(peripheral, options: [
+            CBConnectPeripheralOptionNotifyOnDisconnectionKey: true
+        ])
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
@@ -91,6 +95,7 @@ extension BLEManager: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        self.peripheral = nil
         connectionState = .disconnected
         startScanning()
     }
@@ -118,7 +123,7 @@ extension BLEManager: CBPeripheralDelegate {
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        guard let data = characteristic.value else { return }
+        guard let data = characteristic.value, error == nil else { return }
 
         DispatchQueue.main.async {
             switch characteristic.uuid {
