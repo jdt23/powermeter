@@ -2,60 +2,42 @@ import SwiftUI
 
 @main
 struct PowerMeterApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var bleManager = BLEManager()
+    @StateObject private var healthKitManager = HealthKitManager()
+    @StateObject private var workoutSession = WorkoutSession()
+    @StateObject private var connectivityManager = PhoneConnectivityManager()
 
     var body: some Scene {
         WindowGroup {
-            // This is unused — SceneDelegate sets up the real root view
-            Color.black
+            FullScreenContainer {
+                ContentView()
+            }
+            .environmentObject(bleManager)
+            .environmentObject(healthKitManager)
+            .environmentObject(workoutSession)
+            .environmentObject(connectivityManager)
+            .onAppear {
+                healthKitManager.requestAuthorization()
+            }
+            .preferredColorScheme(.dark)
         }
     }
 }
 
-// MARK: - UIKit App/Scene Delegates for full-screen control
+/// Wraps content in a UIHostingController with safeAreaRegions = []
+/// This is the only reliable way to disable safe areas on iOS 26.
+struct FullScreenContainer<Content: View>: UIViewControllerRepresentable {
+    @ViewBuilder let content: Content
 
-class AppDelegate: NSObject, UIApplicationDelegate {
-    // Shared state objects — created once, shared via SceneDelegate
-    let bleManager = BLEManager()
-    let healthKitManager = HealthKitManager()
-    let workoutSession = WorkoutSession()
-    let connectivityManager = PhoneConnectivityManager()
-
-    func application(
-        _ application: UIApplication,
-        configurationForConnecting connectingSceneSession: UISceneSession,
-        options: UIScene.ConnectionOptions
-    ) -> UISceneConfiguration {
-        let config = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
-        config.delegateClass = SceneDelegate.self
-        return config
+    func makeUIViewController(context: Context) -> UIHostingController<Content> {
+        let vc = UIHostingController(rootView: content)
+        vc.safeAreaRegions = []
+        vc.view.backgroundColor = .black
+        return vc
     }
-}
 
-class SceneDelegate: NSObject, UIWindowSceneDelegate {
-    var window: UIWindow?
-
-    func scene(_ scene: UIScene, willConnectTo session: UISceneSession,
-               options connectionOptions: UIScene.ConnectionOptions) {
-        guard let windowScene = scene as? UIWindowScene else { return }
-
-        let appDelegate = UIApplication.shared.delegate as! AppDelegate
-        appDelegate.healthKitManager.requestAuthorization()
-
-        let contentView = ContentView()
-            .environmentObject(appDelegate.bleManager)
-            .environmentObject(appDelegate.healthKitManager)
-            .environmentObject(appDelegate.workoutSession)
-            .environmentObject(appDelegate.connectivityManager)
-            .preferredColorScheme(.dark)
-
-        let hostingController = UIHostingController(rootView: contentView)
-        hostingController.safeAreaRegions = []           // DISABLE safe area entirely
-        hostingController.view.backgroundColor = .black
-
-        let window = UIWindow(windowScene: windowScene)
-        window.rootViewController = hostingController
-        window.makeKeyAndVisible()
-        self.window = window
+    func updateUIViewController(_ vc: UIHostingController<Content>, context: Context) {
+        vc.rootView = content
+        vc.safeAreaRegions = []
     }
 }

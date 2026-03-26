@@ -10,26 +10,22 @@ struct ContentView: View {
     private var H: CGFloat { UIScreen.main.bounds.height }
 
     var body: some View {
-        Group {
-            if showingSummary, let summary = workoutSession.lastSummary {
-                WorkoutSummaryView(summary: summary) {
-                    showingSummary = false
-                }
-                .frame(width: W, height: H)
-                .background(Color.black)
-            } else {
-                BikeComputerView(
-                    screenW: W,
-                    screenH: H,
-                    onWorkoutEnd: {
-                        if workoutSession.lastSummary != nil {
-                            showingSummary = true
-                        }
-                    }
-                )
+        if showingSummary, let summary = workoutSession.lastSummary {
+            WorkoutSummaryView(summary: summary) {
+                showingSummary = false
             }
+            .frame(width: W, height: H)
+            .background(Color.black)
+        } else {
+            BikeComputerView(
+                screenW: W,
+                screenH: H,
+                onWorkoutEnd: {
+                    if workoutSession.lastSummary != nil {
+                        showingSummary = true
+                    }
+                }
+            )
         }
-        .statusBarHidden(true)
-        .persistentSystemOverlays(.hidden)
     }
 }
