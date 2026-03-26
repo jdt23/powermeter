@@ -6,28 +6,21 @@ struct ContentView: View {
     @EnvironmentObject var workoutSession: WorkoutSession
     @State private var showingSummary = false
 
-    // Get real values from UIKit — SwiftUI's safe area APIs lie when ignoresSafeArea is used
-    private var fullW: CGFloat { UIScreen.main.bounds.width }
-    private var fullH: CGFloat { UIScreen.main.bounds.height }
-    private var topInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first?.safeAreaInsets.top ?? 0
-    }
+    private var W: CGFloat { UIScreen.main.bounds.width }
+    private var H: CGFloat { UIScreen.main.bounds.height }
 
     var body: some View {
-        ZStack {
-            Color.black
-
+        Group {
             if showingSummary, let summary = workoutSession.lastSummary {
                 WorkoutSummaryView(summary: summary) {
                     showingSummary = false
                 }
-                .frame(width: fullW, height: fullH)
+                .frame(width: W, height: H)
+                .background(Color.black)
             } else {
                 BikeComputerView(
-                    screenW: fullW,
-                    screenH: fullH,
+                    screenW: W,
+                    screenH: H,
                     onWorkoutEnd: {
                         if workoutSession.lastSummary != nil {
                             showingSummary = true
@@ -36,9 +29,6 @@ struct ContentView: View {
                 )
             }
         }
-        .frame(width: fullW, height: fullH)
-        .position(x: fullW / 2, y: fullH / 2)
-        .ignoresSafeArea()
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
     }
