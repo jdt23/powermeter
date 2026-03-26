@@ -27,6 +27,8 @@ targets:
       path: PowerMeterApp/PowerMeterApp.entitlements
     capabilities:
       - HealthKit
+    dependencies:
+      - target: PowerMeterWatch
 
   PowerMeterWatch:
     type: application
@@ -49,6 +51,3 @@ targets:
       path: PowerMeterWatch/PowerMeterWatch.entitlements
     capabilities:
       - HealthKit
-    dependencies:
-      - target: PowerMeterApp
-        embed: false
