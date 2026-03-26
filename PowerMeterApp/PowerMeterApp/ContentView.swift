@@ -8,23 +8,31 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geo in
-            if showingSummary, let summary = workoutSession.lastSummary {
-                WorkoutSummaryView(summary: summary) {
-                    showingSummary = false
-                }
-                .frame(width: geo.size.width, height: geo.size.height)
-                .background(Color.black)
-            } else {
-                BikeComputerView(
-                    screenW: geo.size.width,
-                    screenH: geo.size.height,
-                    onWorkoutEnd: {
-                        if workoutSession.lastSummary != nil {
-                            showingSummary = true
-                        }
+            let topInset = geo.safeAreaInsets.top
+            let bottomInset = geo.safeAreaInsets.bottom
+            let fullW = geo.size.width
+            let fullH = geo.size.height + topInset + bottomInset
+
+            Group {
+                if showingSummary, let summary = workoutSession.lastSummary {
+                    WorkoutSummaryView(summary: summary) {
+                        showingSummary = false
                     }
-                )
+                    .frame(width: fullW, height: fullH)
+                    .background(Color.black)
+                } else {
+                    BikeComputerView(
+                        screenW: fullW,
+                        screenH: fullH,
+                        onWorkoutEnd: {
+                            if workoutSession.lastSummary != nil {
+                                showingSummary = true
+                            }
+                        }
+                    )
+                }
             }
+            .offset(y: -topInset)
         }
         .ignoresSafeArea()
         .statusBarHidden(true)
