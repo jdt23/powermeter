@@ -11,13 +11,15 @@ struct ContentView: View {
             WorkoutSummaryView(summary: summary) {
                 showingSummary = false
             }
-            .background(Color.black.ignoresSafeArea())
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black)
         } else {
             BikeComputerView(onWorkoutEnd: {
                 if workoutSession.lastSummary != nil {
                     showingSummary = true
                 }
             })
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
