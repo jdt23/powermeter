@@ -9,38 +9,35 @@ struct PowerMeterApp: App {
 
     var body: some Scene {
         WindowGroup {
-            FullScreenContainer {
-                ContentView()
-            }
-            .ignoresSafeArea()
-            .environmentObject(bleManager)
-            .environmentObject(healthKitManager)
-            .environmentObject(workoutSession)
-            .environmentObject(connectivityManager)
-            .onAppear {
-                healthKitManager.requestAuthorization()
-            }
-            .preferredColorScheme(.dark)
-            .statusBarHidden(true)
-            .persistentSystemOverlays(.hidden)
+            ContentView()
+                .environmentObject(bleManager)
+                .environmentObject(healthKitManager)
+                .environmentObject(workoutSession)
+                .environmentObject(connectivityManager)
+                .onAppear {
+                    healthKitManager.requestAuthorization()
+                    disableSafeArea()
+                }
+                .preferredColorScheme(.dark)
         }
     }
-}
 
-/// Wraps content in a UIHostingController with safeAreaRegions = []
-/// This is the only reliable way to disable safe areas on iOS 26.
-struct FullScreenContainer<Content: View>: UIViewControllerRepresentable {
-    @ViewBuilder let content: Content
+    /// Disable safe area on the ROOT hosting controller that SwiftUI creates.
+    /// This is the only way to get true edge-to-edge content.
+    private func disableSafeArea() {
+        DispatchQueue.main.async {
+            guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let window = scene.windows.first,
+                  let rootVC = window.rootViewController else { return }
 
-    func makeUIViewController(context: Context) -> UIHostingController<Content> {
-        let vc = UIHostingController(rootView: content)
-        vc.safeAreaRegions = []
-        vc.view.backgroundColor = .black
-        return vc
-    }
-
-    func updateUIViewController(_ vc: UIHostingController<Content>, context: Context) {
-        vc.rootView = content
-        vc.safeAreaRegions = []
+            // Cancel out the system safe area insets with negative additionalSafeAreaInsets
+            let insets = rootVC.view.safeAreaInsets
+            rootVC.additionalSafeAreaInsets = UIEdgeInsets(
+                top: -insets.top,
+                left: -insets.left,
+                bottom: -insets.bottom,
+                right: -insets.right
+            )
+        }
     }
 }

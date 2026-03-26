@@ -8,21 +8,16 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geo in
-            // Inside FullScreenContainer (safeAreaRegions=[]),
-            // geo.size should be the true full size
-            let w = geo.size.width
-            let h = geo.size.height
-
             if showingSummary, let summary = workoutSession.lastSummary {
                 WorkoutSummaryView(summary: summary) {
                     showingSummary = false
                 }
-                .frame(width: w, height: h)
+                .frame(width: geo.size.width, height: geo.size.height)
                 .background(Color.black)
             } else {
                 BikeComputerView(
-                    screenW: w,
-                    screenH: h,
+                    screenW: geo.size.width,
+                    screenH: geo.size.height,
                     onWorkoutEnd: {
                         if workoutSession.lastSummary != nil {
                             showingSummary = true
@@ -31,6 +26,9 @@ struct ContentView: View {
                 )
             }
         }
-        .background(Color.black)
+        .ignoresSafeArea()
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
+        .background(Color.black.ignoresSafeArea())
     }
 }
