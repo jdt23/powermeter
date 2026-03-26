@@ -18,57 +18,54 @@ struct BikeComputerView: View {
 
     private var hasSecondPage: Bool { workoutSession.state != .idle }
 
+    // Use actual screen size — no safe area ambiguity
+    private var screenW: CGFloat { UIScreen.main.bounds.width }
+    private var screenH: CGFloat { UIScreen.main.bounds.height }
+
+    private let ctrlH: CGFloat = 44
+    private let barH: CGFloat = 24
+
+    private var gridH: CGFloat { screenH - ctrlH - barH }
+
     var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
-            let ctrlH: CGFloat = 46
-            let barH: CGFloat = 26
-            let gridH = h - ctrlH - barH
+        VStack(spacing: 0) {
+            statusBar.frame(width: screenW, height: barH)
 
-            VStack(spacing: 0) {
-                statusBar.frame(height: barH)
+            ZStack(alignment: .topLeading) {
+                mainPage()
+                    .frame(width: screenW, height: gridH)
+                    .offset(x: page == 0 ? dragOffset : dragOffset - screenW)
 
-                // Custom swipeable pages — no TabView padding
-                ZStack(alignment: .topLeading) {
-                    mainPage(w: w, h: gridH)
-                        .frame(width: w, height: gridH)
-                        .offset(x: page == 0 ? dragOffset : dragOffset - w)
-
-                    if hasSecondPage {
-                        detailPage(w: w, h: gridH)
-                            .frame(width: w, height: gridH)
-                            .offset(x: page == 0 ? w + dragOffset : dragOffset)
-                    }
+                if hasSecondPage {
+                    detailPage()
+                        .frame(width: screenW, height: gridH)
+                        .offset(x: page == 0 ? screenW + dragOffset : dragOffset)
                 }
-                .frame(width: w, height: gridH)
-                .clipped()
-                .gesture(
-                    DragGesture()
-                        .onChanged { v in
-                            guard hasSecondPage else { return }
-                            dragOffset = v.translation.width
-                        }
-                        .onEnded { v in
-                            guard hasSecondPage else { return }
-                            let threshold: CGFloat = 60
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                if v.translation.width < -threshold && page == 0 {
-                                    page = 1
-                                } else if v.translation.width > threshold && page == 1 {
-                                    page = 0
-                                }
-                                dragOffset = 0
-                            }
-                        }
-                )
-
-                workoutControls.frame(height: ctrlH)
             }
-            .frame(width: w, height: h)
+            .frame(width: screenW, height: gridH)
+            .clipped()
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { v in
+                        guard hasSecondPage else { return }
+                        dragOffset = v.translation.width
+                    }
+                    .onEnded { v in
+                        guard hasSecondPage else { return }
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            if v.translation.width < -60 && page == 0 { page = 1 }
+                            else if v.translation.width > 60 && page == 1 { page = 0 }
+                            dragOffset = 0
+                        }
+                    }
+            )
+
+            workoutControls.frame(width: screenW, height: ctrlH)
         }
-        .ignoresSafeArea()
+        .frame(width: screenW, height: screenH)
         .background(Color.black)
+        .ignoresSafeArea()
         .onAppear { startRecording(); workoutSession.ftp = ftp }
         .onDisappear { recordingCancellable?.cancel() }
         .confirmationDialog("End Workout?", isPresented: $showingStopConfirmation) {
@@ -123,10 +120,10 @@ struct BikeComputerView: View {
 
     // MARK: - Page 1
 
-    private func mainPage(w: CGFloat, h: CGFloat) -> some View {
+    private func mainPage() -> some View {
         let active = workoutSession.state != .idle
         let g: CGFloat = 2
-        let rh = (h - g * 3) / 4
+        let rh = (gridH - g * 3) / 4
 
         return VStack(spacing: g) {
             powerCard(height: rh, active: active)
@@ -164,14 +161,13 @@ struct BikeComputerView: View {
 
     // MARK: - Page 2
 
-    private func detailPage(w: CGFloat, h: CGFloat) -> some View {
+    private func detailPage() -> some View {
         let g: CGFloat = 2
-        let rh = (h - g) / 2
+        let rh = (gridH - g) / 2
 
         return VStack(spacing: g) {
             HStack(spacing: g) {
-                cell("NORMALIZED PWR", "\(Int(workoutSession.normalizedPower))", "W", .purple, rh,
-                     avg: nil, peak: nil)
+                cell("NORMALIZED PWR", "\(Int(workoutSession.normalizedPower))", "W", .purple, rh)
                 cell("INTENSITY", String(format: "%.2f", workoutSession.intensityFactor), "IF", .indigo, rh)
             }
 

@@ -7,13 +7,12 @@ struct ContentView: View {
     @State private var showingSummary = false
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
+        Group {
             if showingSummary, let summary = workoutSession.lastSummary {
                 WorkoutSummaryView(summary: summary) {
                     showingSummary = false
                 }
+                .background(Color.black)
             } else {
                 BikeComputerView(onWorkoutEnd: {
                     if workoutSession.lastSummary != nil {
@@ -22,5 +21,7 @@ struct ContentView: View {
                 })
             }
         }
+        .ignoresSafeArea()
+        .statusBarHidden(true)
     }
 }
