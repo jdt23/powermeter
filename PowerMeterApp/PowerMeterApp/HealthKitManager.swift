@@ -11,8 +11,6 @@ class HealthKitManager: ObservableObject {
 
     private let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
     private let activeEnergyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!
-    private let cyclingPowerType = HKQuantityType.quantityType(forIdentifier: .cyclingPower)!
-    private let cyclingCadenceType = HKQuantityType.quantityType(forIdentifier: .cyclingCadence)!
     private let workoutType = HKObjectType.workoutType()
 
     func requestAuthorization() {
@@ -20,7 +18,7 @@ class HealthKitManager: ObservableObject {
 
         let readTypes: Set<HKObjectType> = [heartRateType, activeEnergyType, workoutType]
         let writeTypes: Set<HKSampleType> = [
-            workoutType, activeEnergyType, cyclingPowerType, cyclingCadenceType, heartRateType
+            workoutType, activeEnergyType, heartRateType
         ]
 
         healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { success, _ in
@@ -97,63 +95,51 @@ class HealthKitManager: ObservableObject {
                 return
             }
 
+            // Build samples - only use standard types that are reliably writable
             var allSamples: [HKQuantitySample] = []
-
-            // Power samples
-            let powerUnit = HKUnit.watt()
-            for (date, value) in powerSamples where value > 0 {
-                let quantity = HKQuantity(unit: powerUnit, doubleValue: value)
-                let sample = HKQuantitySample(
-                    type: self.cyclingPowerType,
-                    quantity: quantity,
-                    start: date,
-                    end: date
-                )
-                allSamples.append(sample)
-            }
-
-            // Cadence samples (HealthKit uses rev/min for cycling cadence)
-            let cadenceUnit = HKUnit.count().unitDivided(by: .minute())
-            for (date, value) in cadenceSamples where value > 0 {
-                let quantity = HKQuantity(unit: cadenceUnit, doubleValue: value)
-                let sample = HKQuantitySample(
-                    type: self.cyclingCadenceType,
-                    quantity: quantity,
-                    start: date,
-                    end: date
-                )
-                allSamples.append(sample)
-            }
 
             // Heart rate samples
             let hrUnit = HKUnit.count().unitDivided(by: .minute())
             for (date, value) in heartRateSamples where value > 0 {
-                let quantity = HKQuantity(unit: hrUnit, doubleValue: value)
                 let sample = HKQuantitySample(
                     type: self.heartRateType,
-                    quantity: quantity,
-                    start: date,
-                    end: date
+                    quantity: HKQuantity(unit: hrUnit, doubleValue: value),
+                    start: date, end: date
                 )
                 allSamples.append(sample)
             }
 
-            // Active energy
+            // Active energy as a single summary sample
             if totalCalories > 0 {
-                let calQuantity = HKQuantity(unit: .kilocalorie(), doubleValue: totalCalories)
-                let calSample = HKQuantitySample(
+                let sample = HKQuantitySample(
                     type: self.activeEnergyType,
-                    quantity: calQuantity,
-                    start: start,
-                    end: end
+                    quantity: HKQuantity(unit: .kilocalorie(), doubleValue: totalCalories),
+                    start: start, end: end
                 )
-                allSamples.append(calSample)
+                allSamples.append(sample)
             }
 
-            builder.add(allSamples) { _, _ in
-                builder.endCollection(withEnd: end) { _, _ in
-                    builder.finishWorkout { workout, error in
-                        completion(workout != nil, error)
+            let finishBlock = {
+                builder.endCollection(withEnd: end) { endOk, endErr in
+                    guard endOk else {
+                        completion(false, endErr)
+                        return
+                    }
+                    builder.finishWorkout { workout, finishErr in
+                        completion(workout != nil, finishErr)
+                    }
+                }
+            }
+
+            if allSamples.isEmpty {
+                finishBlock()
+            } else {
+                builder.add(allSamples) { addOk, addErr in
+                    if !addOk {
+                        // Try finishing without samples rather than failing entirely
+                        finishBlock()
+                    } else {
+                        finishBlock()
                     }
                 }
             }
