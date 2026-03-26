@@ -7,8 +7,6 @@ struct BikeComputerView: View {
     @EnvironmentObject var workoutSession: WorkoutSession
     @EnvironmentObject var connectivityManager: PhoneConnectivityManager
 
-    let screenW: CGFloat
-    let screenH: CGFloat
     var onWorkoutEnd: () -> Void
 
     @State private var showingStopConfirmation = false
@@ -19,31 +17,43 @@ struct BikeComputerView: View {
     @AppStorage("ftp") private var ftp: Double = 200.0
 
     private var hasPage2: Bool { workoutSession.state != .idle }
-    private let ctrlH: CGFloat = 44
-    private let barH: CGFloat = 24
-    private var gridH: CGFloat { screenH - ctrlH - barH }
 
     var body: some View {
-        VStack(spacing: 0) {
-            statusBar.frame(width: screenW, height: barH)
+        VStack(spacing: 2) {
+            statusBar.frame(height: 28)
 
-            ZStack(alignment: .topLeading) {
-                page1().frame(width: screenW, height: gridH)
-                    .offset(x: page == 0 ? dragOffset : dragOffset - screenW)
-                if hasPage2 {
-                    page2().frame(width: screenW, height: gridH)
-                        .offset(x: page == 0 ? screenW + dragOffset : dragOffset)
+            // Swipeable content area — each page fills all remaining space
+            GeometryReader { geo in
+                let w = geo.size.width
+                ZStack(alignment: .topLeading) {
+                    page1.frame(width: w, height: geo.size.height)
+                        .offset(x: page == 0 ? dragOffset : dragOffset - w)
+                    if hasPage2 {
+                        page2.frame(width: w, height: geo.size.height)
+                            .offset(x: page == 0 ? w + dragOffset : dragOffset)
+                    }
                 }
+                .clipped()
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture()
+                        .onChanged { v in guard hasPage2 else { return }; dragOffset = v.translation.width }
+                        .onEnded { v in
+                            guard hasPage2 else { return }
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                if v.translation.width < -60 && page == 0 { page = 1 }
+                                else if v.translation.width > 60 && page == 1 { page = 0 }
+                                dragOffset = 0
+                            }
+                        }
+                )
             }
-            .frame(width: screenW, height: gridH)
-            .clipped()
-            .contentShape(Rectangle())
-            .gesture(swipeGesture)
 
-            controls.frame(width: screenW, height: ctrlH)
+            controls.frame(height: 44)
         }
-        .frame(width: screenW, height: screenH)
-        .background(Color.black)
+        .background(Color.black.ignoresSafeArea())
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
         .onAppear { startRecording(); workoutSession.ftp = ftp }
         .onDisappear { recordingCancellable?.cancel() }
         .confirmationDialog("End Workout?", isPresented: $showingStopConfirmation) {
@@ -51,19 +61,6 @@ struct BikeComputerView: View {
             Button("Cancel", role: .cancel) {}
         }
         .sheet(isPresented: $showingSettings) { SettingsView() }
-    }
-
-    private var swipeGesture: some Gesture {
-        DragGesture()
-            .onChanged { v in guard hasPage2 else { return }; dragOffset = v.translation.width }
-            .onEnded { v in
-                guard hasPage2 else { return }
-                withAnimation(.easeOut(duration: 0.2)) {
-                    if v.translation.width < -60 && page == 0 { page = 1 }
-                    else if v.translation.width > 60 && page == 1 { page = 0 }
-                    dragOffset = 0
-                }
-            }
     }
 
     // MARK: - Status Bar
@@ -101,82 +98,80 @@ struct BikeComputerView: View {
         }
     }
 
-    // MARK: - Page 1
+    // MARK: - Page 1: flexible rows, no manual height
 
-    private func page1() -> some View {
+    private var page1: some View {
         let on = workoutSession.state != .idle
-        let g: CGFloat = 2
-        let rh = (gridH - g * 3) / 4
+        return VStack(spacing: 2) {
+            pwrCard(on)
 
-        return VStack(spacing: g) {
-            pwrCard(rh, on)
-            HStack(spacing: g) {
-                tile("CADENCE", "\(bleManager.cadence)", "RPM", .cyan, rh,
+            HStack(spacing: 2) {
+                tile("CADENCE", "\(bleManager.cadence)", "RPM", .cyan,
                      on ? "avg \(Int(workoutSession.averageCadence))" : nil,
                      on && workoutSession.maxCadence > 0 ? "max \(Int(workoutSession.maxCadence))" : nil)
-                tile("RESISTANCE", "\(bleManager.resistance)", "", .orange, rh,
+                tile("RESISTANCE", "\(bleManager.resistance)", "", .orange,
                      on ? "avg \(Int(workoutSession.averageResistance))" : nil,
                      on && workoutSession.maxResistance > 0 ? "max \(Int(workoutSession.maxResistance))" : nil)
             }
-            HStack(spacing: g) {
-                tile("HEART RATE", currentHeartRate > 0 ? "\(Int(currentHeartRate))" : "--", "BPM", .red, rh,
+
+            HStack(spacing: 2) {
+                tile("HEART RATE", currentHeartRate > 0 ? "\(Int(currentHeartRate))" : "--", "BPM", .red,
                      on && workoutSession.averageHeartRate > 0 ? "avg \(Int(workoutSession.averageHeartRate))" : nil,
                      on && workoutSession.maxHeartRate > 0 ? "max \(Int(workoutSession.maxHeartRate))" : nil)
-                tile("SPEED", on ? String(format: "%.1f", workoutSession.speed) : "--", "MPH", .mint, rh,
+                tile("SPEED", on ? String(format: "%.1f", workoutSession.speed) : "--", "MPH", .mint,
                      on && workoutSession.averageSpeed > 0 ? String(format: "avg %.1f", workoutSession.averageSpeed) : nil,
                      on && workoutSession.maxSpeed > 0 ? String(format: "max %.1f", workoutSession.maxSpeed) : nil)
             }
-            HStack(spacing: g) {
-                tile("DISTANCE", on ? String(format: "%.2f", workoutSession.distance) : "--", "MI", .mint, rh, nil, nil)
-                tile("CALORIES", "\(Int(workoutSession.totalCalories))", "KCAL", .yellow, rh, nil, nil)
+
+            HStack(spacing: 2) {
+                tile("DISTANCE", on ? String(format: "%.2f", workoutSession.distance) : "--", "MI", .mint, nil, nil)
+                tile("CALORIES", "\(Int(workoutSession.totalCalories))", "KCAL", .yellow, nil, nil)
             }
         }
     }
 
     // MARK: - Page 2
 
-    private func page2() -> some View {
-        let g: CGFloat = 2
-        let rh = (gridH - g) / 2
-
-        return VStack(spacing: g) {
-            HStack(spacing: g) {
-                tile("NORMALIZED PWR", "\(Int(workoutSession.normalizedPower))", "W", .purple, rh, nil, nil)
-                tile("INTENSITY", String(format: "%.2f", workoutSession.intensityFactor), "IF", .indigo, rh, nil, nil)
+    private var page2: some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 2) {
+                tile("NORMALIZED PWR", "\(Int(workoutSession.normalizedPower))", "W", .purple, nil, nil)
+                tile("INTENSITY", String(format: "%.2f", workoutSession.intensityFactor), "IF", .indigo, nil, nil)
             }
-            HStack(spacing: g) {
-                tile("TRAINING STRESS", "\(Int(workoutSession.tss))", "TSS", .pink, rh, nil, nil)
-                zoneTile(rh)
+            HStack(spacing: 2) {
+                tile("TRAINING STRESS", "\(Int(workoutSession.tss))", "TSS", .pink, nil, nil)
+                zoneTile
             }
         }
     }
 
     // MARK: - Zone Tile
 
-    private func zoneTile(_ h: CGFloat) -> some View {
+    private var zoneTile: some View {
         let z = workoutSession.powerZone; let c = zColor(z)
         return ZStack {
             RoundedRectangle(cornerRadius: 8).fill(c.opacity(0.1))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(c.opacity(0.3), lineWidth: 1))
-            VStack(spacing: 0) {
+            VStack {
                 Text("ZONE").font(.system(size: 9, weight: .bold)).foregroundColor(c.opacity(0.65)).tracking(1)
-                Spacer(minLength: 0)
-                Text("Z\(z.rawValue)").font(.system(size: min(h * 0.35, 80), weight: .heavy, design: .rounded)).foregroundColor(c)
+                Spacer()
+                Text("Z\(z.rawValue)").font(.system(size: 60, weight: .heavy, design: .rounded)).foregroundColor(c)
+                    .minimumScaleFactor(0.4).lineLimit(1)
                 Text(z.label).font(.system(size: 16, weight: .bold)).foregroundColor(c.opacity(0.7))
-                Spacer(minLength: 0)
-            }.padding(.top, 2)
-        }.frame(maxWidth: .infinity).frame(height: h)
+                Spacer()
+            }.padding(.top, 4)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Power Card
 
-    private func pwrCard(_ h: CGFloat, _ on: Bool) -> some View {
+    private func pwrCard(_ on: Bool) -> some View {
         let z = workoutSession.powerZone; let c = on ? zColor(z) : pwrColor
         return ZStack {
             RoundedRectangle(cornerRadius: 8)
                 .fill(LinearGradient(colors: [c.opacity(0.15), Color.white.opacity(0.02)], startPoint: .top, endPoint: .bottom))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(c.opacity(0.3), lineWidth: 1))
-            VStack(spacing: 0) {
+            VStack {
                 HStack {
                     Text("POWER").font(.system(size: 9, weight: .bold)).foregroundColor(c.opacity(0.7)).tracking(2)
                     Spacer()
@@ -185,52 +180,54 @@ struct BikeComputerView: View {
                             .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(c.opacity(0.15)))
                     }
                 }.padding(.horizontal, 8)
-                Spacer(minLength: 0)
+                Spacer()
                 HStack(alignment: .lastTextBaseline, spacing: 3) {
                     Text("\(bleManager.power)")
-                        .font(.system(size: min(h * 0.52, 100), weight: .heavy, design: .rounded))
-                        .foregroundColor(.white).minimumScaleFactor(0.4).lineLimit(1)
-                    Text("W").font(.system(size: 18, weight: .semibold)).foregroundColor(Color.white.opacity(0.4)).padding(.bottom, 2)
+                        .font(.system(size: 80, weight: .heavy, design: .rounded))
+                        .foregroundColor(.white).minimumScaleFactor(0.3).lineLimit(1)
+                    Text("W").font(.system(size: 18, weight: .semibold)).foregroundColor(Color.white.opacity(0.4))
                 }
-                Spacer(minLength: 0)
+                Spacer()
                 if on {
-                    HStack(spacing: 14) { sml("avg \(Int(workoutSession.averagePower))"); sml("max \(Int(workoutSession.maxPower))") }
-                        .foregroundColor(c.opacity(0.45)).padding(.bottom, 2)
+                    HStack(spacing: 14) {
+                        Text("avg \(Int(workoutSession.averagePower))").font(.system(size: 10, weight: .semibold, design: .rounded))
+                        Text("max \(Int(workoutSession.maxPower))").font(.system(size: 10, weight: .semibold, design: .rounded))
+                    }.foregroundColor(c.opacity(0.45)).padding(.bottom, 2)
                 }
-            }.padding(.top, 2)
-        }.frame(maxWidth: .infinity).frame(height: h)
+            }.padding(.top, 4)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Tile
+    // MARK: - Tile (flexible size)
 
-    private func tile(_ label: String, _ val: String, _ unit: String, _ color: Color, _ h: CGFloat,
+    private func tile(_ label: String, _ val: String, _ unit: String, _ color: Color,
                       _ avg: String?, _ peak: String?) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.035))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(color.opacity(0.15), lineWidth: 1))
-            VStack(spacing: 0) {
+            VStack {
                 Text(label).font(.system(size: 9, weight: .bold)).foregroundColor(color.opacity(0.65)).tracking(1)
                     .lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: 0)
+                Spacer()
                 HStack(alignment: .lastTextBaseline, spacing: 2) {
-                    Text(val).font(.system(size: min(h * 0.36, 48), weight: .bold, design: .rounded))
-                        .foregroundColor(.white).minimumScaleFactor(0.4).lineLimit(1)
+                    Text(val).font(.system(size: 40, weight: .bold, design: .rounded))
+                        .foregroundColor(.white).minimumScaleFactor(0.3).lineLimit(1)
                     if !unit.isEmpty {
-                        Text(unit).font(.system(size: 9, weight: .medium)).foregroundColor(Color.white.opacity(0.3)).padding(.bottom, 1)
+                        Text(unit).font(.system(size: 9, weight: .medium)).foregroundColor(Color.white.opacity(0.3))
                     }
                 }
-                Spacer(minLength: 0)
+                Spacer()
                 if avg != nil || peak != nil {
                     HStack(spacing: 4) {
                         if let a = avg { Text(a).foregroundColor(color.opacity(0.4)) }
                         if let p = peak { Text(p).foregroundColor(color.opacity(0.4)) }
-                    }.font(.system(size: 9, weight: .semibold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.7).padding(.bottom, 1)
+                    }.font(.system(size: 9, weight: .semibold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.7)
+                        .padding(.bottom, 1)
                 }
-            }.padding(.top, 2)
-        }.frame(maxWidth: .infinity).frame(height: h)
+            }.padding(.top, 4)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func sml(_ t: String) -> some View { Text(t).font(.system(size: 10, weight: .semibold, design: .rounded)) }
     private func zColor(_ z: PowerZone) -> Color {
         switch z { case .z1: return .gray; case .z2: return .blue; case .z3: return .green; case .z4: return .yellow; case .z5: return .orange; case .z6: return .red }
     }
