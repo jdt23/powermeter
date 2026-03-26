@@ -12,6 +12,7 @@ struct PowerMeterApp: App {
             FullScreenContainer {
                 ContentView()
             }
+            .ignoresSafeArea()
             .environmentObject(bleManager)
             .environmentObject(healthKitManager)
             .environmentObject(workoutSession)
@@ -20,6 +21,8 @@ struct PowerMeterApp: App {
                 healthKitManager.requestAuthorization()
             }
             .preferredColorScheme(.dark)
+            .statusBarHidden(true)
+            .persistentSystemOverlays(.hidden)
         }
     }
 }
