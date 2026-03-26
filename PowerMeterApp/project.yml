@@ -21,8 +21,11 @@ targets:
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
     entitlements:
       path: PowerMeterApp/PowerMeterApp.entitlements
+    capabilities:
+      - HealthKit
 
   PowerMeterWatch:
     type: application
@@ -39,6 +42,11 @@ targets:
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "4"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+    entitlements:
+      path: PowerMeterWatch/PowerMeterWatch.entitlements
+    capabilities:
+      - HealthKit
     dependencies:
       - target: PowerMeterApp
         embed: false
