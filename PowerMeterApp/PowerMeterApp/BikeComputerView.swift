@@ -230,18 +230,7 @@ struct BikeComputerView: View {
     }
 
     private func endWorkout() {
-        guard let summary = workoutSession.stop(),
-              let startDate = workoutSession.workoutStartDate else { return }
-
-        healthKitManager.saveWorkout(
-            start: startDate,
-            end: Date(),
-            powerSamples: workoutSession.powerSamples,
-            cadenceSamples: workoutSession.cadenceSamples,
-            heartRateSamples: workoutSession.heartRateSamples,
-            totalCalories: summary.totalCalories
-        ) { _, _ in }
-
+        _ = workoutSession.stop()
         onWorkoutEnd()
     }
 

@@ -8,6 +8,8 @@ enum WorkoutState {
 }
 
 struct WorkoutSummary {
+    let startDate: Date
+    let endDate: Date
     let duration: TimeInterval
     let averagePower: Double
     let maxPower: Double
@@ -15,6 +17,9 @@ struct WorkoutSummary {
     let averageHeartRate: Double
     let maxHeartRate: Double
     let totalCalories: Double
+    let powerSampleCount: Int
+    let cadenceSampleCount: Int
+    let heartRateSampleCount: Int
 }
 
 class WorkoutSession: ObservableObject {
@@ -73,14 +78,22 @@ class WorkoutSession: ObservableObject {
         timer?.cancel()
         state = .idle
 
+        guard let start = startDate else { return nil }
+        let end = Date()
+
         let summary = WorkoutSummary(
+            startDate: start,
+            endDate: end,
             duration: elapsed,
             averagePower: averagePower,
             maxPower: maxPower,
             averageCadence: averageCadence,
             averageHeartRate: averageHeartRate,
             maxHeartRate: maxHeartRate,
-            totalCalories: totalCalories
+            totalCalories: totalCalories,
+            powerSampleCount: powerSamples.filter { $0.1 > 0 }.count,
+            cadenceSampleCount: cadenceSamples.filter { $0.1 > 0 }.count,
+            heartRateSampleCount: heartRateSamples.filter { $0.1 > 0 }.count
         )
         lastSummary = summary
         return summary
@@ -96,7 +109,6 @@ class WorkoutSession: ObservableObject {
         if v > maxPower { maxPower = v }
 
         // Estimate calories: Power(W) * time(s) / 4184 * 4 (assuming ~25% efficiency)
-        // Simplified: ~1 kcal per watt per hour / 0.25 efficiency
         // Per 2-second sample: watts * 2 / 4184 * 4
         totalCalories = powerSum * 2.0 / 4184.0 * 4.0
     }
