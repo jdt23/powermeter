@@ -28,6 +28,9 @@ class WorkoutSession: ObservableObject {
     @Published var averagePower: Double = 0
     @Published var maxPower: Double = 0
     @Published var averageCadence: Double = 0
+    @Published var maxCadence: Double = 0
+    @Published var averageResistance: Double = 0
+    @Published var maxResistance: Double = 0
     @Published var averageHeartRate: Double = 0
     @Published var maxHeartRate: Double = 0
     @Published var totalCalories: Double = 0
@@ -47,6 +50,8 @@ class WorkoutSession: ObservableObject {
     private var powerCount: Int = 0
     private var cadenceSum: Double = 0
     private var cadenceCount: Int = 0
+    private var resistanceSum: Double = 0
+    private var resistanceCount: Int = 0
     private var hrSum: Double = 0
     private var hrCount: Int = 0
 
@@ -120,6 +125,16 @@ class WorkoutSession: ObservableObject {
         cadenceSum += v
         cadenceCount += 1
         averageCadence = cadenceSum / Double(cadenceCount)
+        if v > maxCadence { maxCadence = v }
+    }
+
+    func recordResistance(_ value: UInt8) {
+        guard state == .active else { return }
+        let v = Double(value)
+        resistanceSum += v
+        resistanceCount += 1
+        averageResistance = resistanceSum / Double(resistanceCount)
+        if v > maxResistance { maxResistance = v }
     }
 
     func recordHeartRate(_ value: Double) {
@@ -149,6 +164,9 @@ class WorkoutSession: ObservableObject {
         averagePower = 0
         maxPower = 0
         averageCadence = 0
+        maxCadence = 0
+        averageResistance = 0
+        maxResistance = 0
         averageHeartRate = 0
         maxHeartRate = 0
         totalCalories = 0
@@ -159,6 +177,8 @@ class WorkoutSession: ObservableObject {
         powerCount = 0
         cadenceSum = 0
         cadenceCount = 0
+        resistanceSum = 0
+        resistanceCount = 0
         hrSum = 0
         hrCount = 0
         accumulatedPause = 0

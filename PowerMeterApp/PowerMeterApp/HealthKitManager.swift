@@ -17,9 +17,7 @@ class HealthKitManager: ObservableObject {
         guard HKHealthStore.isHealthDataAvailable() else { return }
 
         let readTypes: Set<HKObjectType> = [heartRateType, activeEnergyType, workoutType]
-        let writeTypes: Set<HKSampleType> = [
-            workoutType, activeEnergyType, heartRateType
-        ]
+        let writeTypes: Set<HKSampleType> = [workoutType, activeEnergyType, heartRateType]
 
         healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { success, _ in
             DispatchQueue.main.async {
@@ -34,21 +32,13 @@ class HealthKitManager: ObservableObject {
     func startHeartRateStream() {
         stopHeartRateStream()
 
-        let predicate = HKQuery.predicateForSamples(
-            withStart: Date(),
-            end: nil,
-            options: .strictStartDate
-        )
+        let predicate = HKQuery.predicateForSamples(withStart: Date(), end: nil, options: .strictStartDate)
 
         let query = HKAnchoredObjectQuery(
-            type: heartRateType,
-            predicate: predicate,
-            anchor: nil,
-            limit: HKObjectQueryNoLimit
+            type: heartRateType, predicate: predicate, anchor: nil, limit: HKObjectQueryNoLimit
         ) { [weak self] _, samples, _, _, _ in
             self?.processHeartRateSamples(samples)
         }
-
         query.updateHandler = { [weak self] _, samples, _, _, _ in
             self?.processHeartRateSamples(samples)
         }
@@ -67,9 +57,7 @@ class HealthKitManager: ObservableObject {
     private func processHeartRateSamples(_ samples: [HKSample]?) {
         guard let samples = samples as? [HKQuantitySample], let latest = samples.last else { return }
         let bpm = latest.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
-        DispatchQueue.main.async {
-            self.heartRate = bpm
-        }
+        DispatchQueue.main.async { self.heartRate = bpm }
     }
 
     // MARK: - Save Workout
@@ -83,64 +71,74 @@ class HealthKitManager: ObservableObject {
         totalCalories: Double,
         completion: @escaping (Bool, Error?) -> Void
     ) {
+        // Safety: ensure end > start
+        let safeEnd = end > start ? end : start.addingTimeInterval(1)
+
         let config = HKWorkoutConfiguration()
         config.activityType = .cycling
         config.locationType = .indoor
 
         let builder = HKWorkoutBuilder(healthStore: healthStore, configuration: config, device: nil)
 
+        // Add a timeout: if HealthKit doesn't respond in 10 seconds, fail gracefully
+        var completed = false
+        let completionLock = NSLock()
+
+        let safeComplete: (Bool, Error?) -> Void = { success, error in
+            completionLock.lock()
+            guard !completed else { completionLock.unlock(); return }
+            completed = true
+            completionLock.unlock()
+            completion(success, error)
+        }
+
+        DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
+            safeComplete(false, NSError(domain: "PowerMeter", code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "HealthKit save timed out. Check Health permissions in Settings > Health > Data Access & Devices > PowerMeter."]))
+        }
+
         builder.beginCollection(withStart: start) { success, error in
             guard success else {
-                completion(false, error)
+                safeComplete(false, error ?? NSError(domain: "PowerMeter", code: -2,
+                    userInfo: [NSLocalizedDescriptionKey: "Could not begin workout collection. Grant all Health permissions in Settings."]))
                 return
             }
 
-            // Build samples - only use standard types that are reliably writable
-            var allSamples: [HKQuantitySample] = []
+            // Only add heart rate and calories — these are well-supported types
+            var samples: [HKQuantitySample] = []
 
-            // Heart rate samples
             let hrUnit = HKUnit.count().unitDivided(by: .minute())
             for (date, value) in heartRateSamples where value > 0 {
-                let sample = HKQuantitySample(
+                // Clamp sample dates to workout range
+                let sampleDate = Swift.min(Swift.max(date, start), safeEnd)
+                samples.append(HKQuantitySample(
                     type: self.heartRateType,
                     quantity: HKQuantity(unit: hrUnit, doubleValue: value),
-                    start: date, end: date
-                )
-                allSamples.append(sample)
+                    start: sampleDate, end: sampleDate
+                ))
             }
 
-            // Active energy as a single summary sample
             if totalCalories > 0 {
-                let sample = HKQuantitySample(
+                samples.append(HKQuantitySample(
                     type: self.activeEnergyType,
                     quantity: HKQuantity(unit: .kilocalorie(), doubleValue: totalCalories),
-                    start: start, end: end
-                )
-                allSamples.append(sample)
+                    start: start, end: safeEnd
+                ))
             }
 
-            let finishBlock = {
-                builder.endCollection(withEnd: end) { endOk, endErr in
-                    guard endOk else {
-                        completion(false, endErr)
-                        return
-                    }
-                    builder.finishWorkout { workout, finishErr in
-                        completion(workout != nil, finishErr)
+            let finish = {
+                builder.endCollection(withEnd: safeEnd) { _, endErr in
+                    builder.finishWorkout { workout, finErr in
+                        safeComplete(workout != nil, finErr ?? endErr)
                     }
                 }
             }
 
-            if allSamples.isEmpty {
-                finishBlock()
+            if samples.isEmpty {
+                finish()
             } else {
-                builder.add(allSamples) { addOk, addErr in
-                    if !addOk {
-                        // Try finishing without samples rather than failing entirely
-                        finishBlock()
-                    } else {
-                        finishBlock()
-                    }
+                builder.add(samples) { _, _ in
+                    finish()
                 }
             }
         }
