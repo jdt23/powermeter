@@ -7,6 +7,8 @@ struct BikeComputerView: View {
     @EnvironmentObject var workoutSession: WorkoutSession
     @EnvironmentObject var connectivityManager: PhoneConnectivityManager
 
+    let screenW: CGFloat
+    let screenH: CGFloat
     var onWorkoutEnd: () -> Void
 
     @State private var showingStopConfirmation = false
@@ -17,32 +19,31 @@ struct BikeComputerView: View {
     @AppStorage("ftp") private var ftp: Double = 200.0
 
     private var hasPage2: Bool { workoutSession.state != .idle }
-    private var W: CGFloat { UIScreen.main.bounds.width }
-    private var H: CGFloat { UIScreen.main.bounds.height }
     private let ctrlH: CGFloat = 44
     private let barH: CGFloat = 24
-    private var gridH: CGFloat { H - ctrlH - barH }
+    private var gridH: CGFloat { screenH - ctrlH - barH }
 
     var body: some View {
         VStack(spacing: 0) {
-            statusBar
+            statusBar.frame(width: screenW, height: barH)
 
             ZStack(alignment: .topLeading) {
-                page1()
-                    .offset(x: page == 0 ? dragOffset : dragOffset - W)
+                page1().frame(width: screenW, height: gridH)
+                    .offset(x: page == 0 ? dragOffset : dragOffset - screenW)
                 if hasPage2 {
-                    page2()
-                        .offset(x: page == 0 ? W + dragOffset : dragOffset)
+                    page2().frame(width: screenW, height: gridH)
+                        .offset(x: page == 0 ? screenW + dragOffset : dragOffset)
                 }
             }
-            .frame(height: gridH)
+            .frame(width: screenW, height: gridH)
             .clipped()
             .contentShape(Rectangle())
             .gesture(swipeGesture)
 
-            controls
+            controls.frame(width: screenW, height: ctrlH)
         }
-        .frame(width: W, height: H)
+        .frame(width: screenW, height: screenH)
+        .background(Color.black)
         .onAppear { startRecording(); workoutSession.ftp = ftp }
         .onDisappear { recordingCancellable?.cancel() }
         .confirmationDialog("End Workout?", isPresented: $showingStopConfirmation) {
@@ -92,14 +93,11 @@ struct BikeComputerView: View {
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: barH)
     }
 
     private var connColor: Color {
         switch bleManager.connectionState {
-        case .connected: return .green
-        case .scanning, .connecting: return .yellow
-        case .disconnected: return .red
+        case .connected: return .green; case .scanning, .connecting: return .yellow; case .disconnected: return .red
         }
     }
 
@@ -112,7 +110,6 @@ struct BikeComputerView: View {
 
         return VStack(spacing: g) {
             pwrCard(rh, on)
-
             HStack(spacing: g) {
                 tile("CADENCE", "\(bleManager.cadence)", "RPM", .cyan, rh,
                      on ? "avg \(Int(workoutSession.averageCadence))" : nil,
@@ -121,7 +118,6 @@ struct BikeComputerView: View {
                      on ? "avg \(Int(workoutSession.averageResistance))" : nil,
                      on && workoutSession.maxResistance > 0 ? "max \(Int(workoutSession.maxResistance))" : nil)
             }
-
             HStack(spacing: g) {
                 tile("HEART RATE", currentHeartRate > 0 ? "\(Int(currentHeartRate))" : "--", "BPM", .red, rh,
                      on && workoutSession.averageHeartRate > 0 ? "avg \(Int(workoutSession.averageHeartRate))" : nil,
@@ -130,15 +126,11 @@ struct BikeComputerView: View {
                      on && workoutSession.averageSpeed > 0 ? String(format: "avg %.1f", workoutSession.averageSpeed) : nil,
                      on && workoutSession.maxSpeed > 0 ? String(format: "max %.1f", workoutSession.maxSpeed) : nil)
             }
-
             HStack(spacing: g) {
-                tile("DISTANCE", on ? String(format: "%.2f", workoutSession.distance) : "--", "MI", .mint, rh,
-                     nil, nil)
-                tile("CALORIES", "\(Int(workoutSession.totalCalories))", "KCAL", .yellow, rh,
-                     nil, nil)
+                tile("DISTANCE", on ? String(format: "%.2f", workoutSession.distance) : "--", "MI", .mint, rh, nil, nil)
+                tile("CALORIES", "\(Int(workoutSession.totalCalories))", "KCAL", .yellow, rh, nil, nil)
             }
         }
-        .frame(width: W, height: gridH)
     }
 
     // MARK: - Page 2
@@ -157,22 +149,19 @@ struct BikeComputerView: View {
                 zoneTile(rh)
             }
         }
-        .frame(width: W, height: gridH)
     }
 
     // MARK: - Zone Tile
 
     private func zoneTile(_ h: CGFloat) -> some View {
-        let z = workoutSession.powerZone
-        let c = zColor(z)
+        let z = workoutSession.powerZone; let c = zColor(z)
         return ZStack {
             RoundedRectangle(cornerRadius: 8).fill(c.opacity(0.1))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(c.opacity(0.3), lineWidth: 1))
             VStack(spacing: 0) {
                 Text("ZONE").font(.system(size: 9, weight: .bold)).foregroundColor(c.opacity(0.65)).tracking(1)
                 Spacer(minLength: 0)
-                Text("Z\(z.rawValue)")
-                    .font(.system(size: min(h * 0.35, 80), weight: .heavy, design: .rounded)).foregroundColor(c)
+                Text("Z\(z.rawValue)").font(.system(size: min(h * 0.35, 80), weight: .heavy, design: .rounded)).foregroundColor(c)
                 Text(z.label).font(.system(size: 16, weight: .bold)).foregroundColor(c.opacity(0.7))
                 Spacer(minLength: 0)
             }.padding(.top, 2)
@@ -182,104 +171,72 @@ struct BikeComputerView: View {
     // MARK: - Power Card
 
     private func pwrCard(_ h: CGFloat, _ on: Bool) -> some View {
-        let z = workoutSession.powerZone
-        let c = on ? zColor(z) : pwrColor
-
+        let z = workoutSession.powerZone; let c = on ? zColor(z) : pwrColor
         return ZStack {
             RoundedRectangle(cornerRadius: 8)
-                .fill(LinearGradient(colors: [c.opacity(0.15), Color.white.opacity(0.02)],
-                                     startPoint: .top, endPoint: .bottom))
+                .fill(LinearGradient(colors: [c.opacity(0.15), Color.white.opacity(0.02)], startPoint: .top, endPoint: .bottom))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(c.opacity(0.3), lineWidth: 1))
-
             VStack(spacing: 0) {
                 HStack {
                     Text("POWER").font(.system(size: 9, weight: .bold)).foregroundColor(c.opacity(0.7)).tracking(2)
                     Spacer()
                     if on {
-                        Text("Z\(z.rawValue) \(z.label)")
-                            .font(.system(size: 9, weight: .bold)).foregroundColor(c.opacity(0.8))
-                            .padding(.horizontal, 6).padding(.vertical, 1)
-                            .background(Capsule().fill(c.opacity(0.15)))
+                        Text("Z\(z.rawValue) \(z.label)").font(.system(size: 9, weight: .bold)).foregroundColor(c.opacity(0.8))
+                            .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(c.opacity(0.15)))
                     }
                 }.padding(.horizontal, 8)
-
                 Spacer(minLength: 0)
-
                 HStack(alignment: .lastTextBaseline, spacing: 3) {
                     Text("\(bleManager.power)")
                         .font(.system(size: min(h * 0.52, 100), weight: .heavy, design: .rounded))
                         .foregroundColor(.white).minimumScaleFactor(0.4).lineLimit(1)
-                    Text("W").font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(Color.white.opacity(0.4)).padding(.bottom, 2)
+                    Text("W").font(.system(size: 18, weight: .semibold)).foregroundColor(Color.white.opacity(0.4)).padding(.bottom, 2)
                 }
-
                 Spacer(minLength: 0)
-
                 if on {
-                    HStack(spacing: 14) {
-                        sml("avg \(Int(workoutSession.averagePower))")
-                        sml("max \(Int(workoutSession.maxPower))")
-                    }.foregroundColor(c.opacity(0.45)).padding(.bottom, 2)
+                    HStack(spacing: 14) { sml("avg \(Int(workoutSession.averagePower))"); sml("max \(Int(workoutSession.maxPower))") }
+                        .foregroundColor(c.opacity(0.45)).padding(.bottom, 2)
                 }
             }.padding(.top, 2)
         }.frame(maxWidth: .infinity).frame(height: h)
     }
 
-    // MARK: - Generic Tile
+    // MARK: - Tile
 
     private func tile(_ label: String, _ val: String, _ unit: String, _ color: Color, _ h: CGFloat,
                       _ avg: String?, _ peak: String?) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.035))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(color.opacity(0.15), lineWidth: 1))
-
             VStack(spacing: 0) {
-                Text(label).font(.system(size: 9, weight: .bold))
-                    .foregroundColor(color.opacity(0.65)).tracking(1)
+                Text(label).font(.system(size: 9, weight: .bold)).foregroundColor(color.opacity(0.65)).tracking(1)
                     .lineLimit(1).minimumScaleFactor(0.7)
-
                 Spacer(minLength: 0)
-
                 HStack(alignment: .lastTextBaseline, spacing: 2) {
-                    Text(val)
-                        .font(.system(size: min(h * 0.36, 48), weight: .bold, design: .rounded))
+                    Text(val).font(.system(size: min(h * 0.36, 48), weight: .bold, design: .rounded))
                         .foregroundColor(.white).minimumScaleFactor(0.4).lineLimit(1)
                     if !unit.isEmpty {
-                        Text(unit).font(.system(size: 9, weight: .medium))
-                            .foregroundColor(Color.white.opacity(0.3)).padding(.bottom, 1)
+                        Text(unit).font(.system(size: 9, weight: .medium)).foregroundColor(Color.white.opacity(0.3)).padding(.bottom, 1)
                     }
                 }
-
                 Spacer(minLength: 0)
-
                 if avg != nil || peak != nil {
                     HStack(spacing: 4) {
                         if let a = avg { Text(a).foregroundColor(color.opacity(0.4)) }
                         if let p = peak { Text(p).foregroundColor(color.opacity(0.4)) }
-                    }
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                    .padding(.bottom, 1)
+                    }.font(.system(size: 9, weight: .semibold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.7).padding(.bottom, 1)
                 }
             }.padding(.top, 2)
         }.frame(maxWidth: .infinity).frame(height: h)
     }
 
-    private func sml(_ t: String) -> some View {
-        Text(t).font(.system(size: 10, weight: .semibold, design: .rounded))
-    }
-
+    private func sml(_ t: String) -> some View { Text(t).font(.system(size: 10, weight: .semibold, design: .rounded)) }
     private func zColor(_ z: PowerZone) -> Color {
-        switch z {
-        case .z1: return .gray; case .z2: return .blue; case .z3: return .green
-        case .z4: return .yellow; case .z5: return .orange; case .z6: return .red
-        }
+        switch z { case .z1: return .gray; case .z2: return .blue; case .z3: return .green; case .z4: return .yellow; case .z5: return .orange; case .z6: return .red }
     }
-
     private var pwrColor: Color {
         let p = Int(bleManager.power)
-        if p == 0 { return .gray }; if p < 100 { return .green }
-        if p < 200 { return .yellow }; if p < 300 { return .orange }; return .red
+        if p == 0 { return .gray }; if p < 100 { return .green }; if p < 200 { return .yellow }; if p < 300 { return .orange }; return .red
     }
 
     // MARK: - Controls
@@ -288,52 +245,43 @@ struct BikeComputerView: View {
         HStack(spacing: 6) {
             switch workoutSession.state {
             case .idle:
-                btn("Start Workout", "play.fill", .green, .black, expand: true, action: startWorkout)
+                Button(action: startWorkout) {
+                    Label("Start Workout", systemImage: "play.fill").font(.system(size: 14, weight: .bold))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.green).foregroundColor(.black).cornerRadius(8)
+                }
             case .active:
-                btn(nil, "pause.fill", Color.white.opacity(0.1), .white, expand: true, action: pauseWorkout)
-                btn(nil, "stop.fill", Color.red.opacity(0.8), .white, expand: false, action: { showingStopConfirmation = true })
+                Button(action: pauseWorkout) {
+                    Image(systemName: "pause.fill").font(.system(size: 16, weight: .bold))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.white.opacity(0.1)).foregroundColor(.white).cornerRadius(8)
+                }
+                Button(action: { showingStopConfirmation = true }) {
+                    Image(systemName: "stop.fill").font(.system(size: 16, weight: .bold))
+                        .frame(maxHeight: .infinity).frame(width: 54).background(Color.red.opacity(0.8)).foregroundColor(.white).cornerRadius(8)
+                }
             case .paused:
-                btn(nil, "play.fill", .green, .black, expand: true, action: resumeWorkout)
-                btn(nil, "stop.fill", Color.red.opacity(0.8), .white, expand: false, action: { showingStopConfirmation = true })
-            }
-        }
-        .padding(.horizontal, 2)
-        .frame(height: ctrlH)
-    }
-
-    private func btn(_ label: String?, _ icon: String, _ bg: Color, _ fg: Color, expand: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Group {
-                if let label {
-                    Label(label, systemImage: icon)
-                } else {
-                    Image(systemName: icon)
+                Button(action: resumeWorkout) {
+                    Image(systemName: "play.fill").font(.system(size: 16, weight: .bold))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.green).foregroundColor(.black).cornerRadius(8)
+                }
+                Button(action: { showingStopConfirmation = true }) {
+                    Image(systemName: "stop.fill").font(.system(size: 16, weight: .bold))
+                        .frame(maxHeight: .infinity).frame(width: 54).background(Color.red.opacity(0.8)).foregroundColor(.white).cornerRadius(8)
                 }
             }
-            .font(.system(size: 15, weight: .bold))
-            .frame(maxWidth: expand ? .infinity : nil, maxHeight: .infinity)
-            .frame(width: expand ? nil : 54)
-            .background(bg).foregroundColor(fg).cornerRadius(8)
-        }
+        }.padding(.horizontal, 2)
     }
 
-    private var currentHeartRate: Double {
-        connectivityManager.watchHeartRate > 0 ? connectivityManager.watchHeartRate : healthKitManager.heartRate
-    }
-
-    // MARK: - Recording
+    private var currentHeartRate: Double { connectivityManager.watchHeartRate > 0 ? connectivityManager.watchHeartRate : healthKitManager.heartRate }
 
     private func startRecording() {
-        recordingCancellable = Timer.publish(every: 2, on: .main, in: .common)
-            .autoconnect()
+        recordingCancellable = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
             .sink { _ in
                 workoutSession.recordPower(bleManager.power)
                 workoutSession.recordCadence(bleManager.cadence)
                 workoutSession.recordResistance(bleManager.resistance)
                 workoutSession.recordHeartRate(currentHeartRate)
                 workoutSession.recordSpeed(cadence: bleManager.cadence, resistance: bleManager.resistance)
-                connectivityManager.sendMetrics(
-                    power: Int(bleManager.power), cadence: Int(bleManager.cadence), resistance: Int(bleManager.resistance))
+                connectivityManager.sendMetrics(power: Int(bleManager.power), cadence: Int(bleManager.cadence), resistance: Int(bleManager.resistance))
             }
     }
 
@@ -343,7 +291,7 @@ struct BikeComputerView: View {
     private func endWorkout() { connectivityManager.sendWorkoutAction("stop"); _ = workoutSession.stop(); page = 0; onWorkoutEnd() }
 
     private func fmtTime(_ t: TimeInterval) -> String {
-        let h = Int(t) / 3600; let m = (Int(t) % 3600) / 60; let s = Int(t) % 60
+        let h = Int(t)/3600; let m = (Int(t)%3600)/60; let s = Int(t)%60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%02d:%02d", m, s)
     }
 }

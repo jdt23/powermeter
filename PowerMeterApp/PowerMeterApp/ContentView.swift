@@ -7,23 +7,27 @@ struct ContentView: View {
     @State private var showingSummary = false
 
     var body: some View {
-        Color.black
-            .ignoresSafeArea(.all)
-            .overlay {
-                if showingSummary, let summary = workoutSession.lastSummary {
-                    WorkoutSummaryView(summary: summary) {
-                        showingSummary = false
-                    }
-                } else {
-                    BikeComputerView(onWorkoutEnd: {
+        GeometryReader { geo in
+            if showingSummary, let summary = workoutSession.lastSummary {
+                WorkoutSummaryView(summary: summary) {
+                    showingSummary = false
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .background(Color.black)
+            } else {
+                BikeComputerView(
+                    screenW: geo.size.width,
+                    screenH: geo.size.height,
+                    onWorkoutEnd: {
                         if workoutSession.lastSummary != nil {
                             showingSummary = true
                         }
-                    })
-                }
+                    }
+                )
             }
-            .ignoresSafeArea(.all)
-            .statusBarHidden(true)
-            .persistentSystemOverlays(.hidden)
+        }
+        .ignoresSafeArea()
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
     }
 }
