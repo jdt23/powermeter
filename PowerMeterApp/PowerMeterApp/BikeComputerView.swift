@@ -5,6 +5,7 @@ struct BikeComputerView: View {
     @EnvironmentObject var bleManager: BLEManager
     @EnvironmentObject var healthKitManager: HealthKitManager
     @EnvironmentObject var workoutSession: WorkoutSession
+    @EnvironmentObject var connectivityManager: PhoneConnectivityManager
 
     var onWorkoutEnd: () -> Void
 
@@ -48,6 +49,11 @@ struct BikeComputerView: View {
             Text(bleManager.connectionState.rawValue)
                 .font(.caption)
                 .foregroundColor(.gray)
+            if connectivityManager.isWatchReachable {
+                Image(systemName: "applewatch.radiowaves.left.and.right")
+                    .font(.caption2)
+                    .foregroundColor(.green)
+            }
             Spacer()
             if workoutSession.state == .active {
                 Text(formatDuration(workoutSession.elapsed))
@@ -100,7 +106,7 @@ struct BikeComputerView: View {
             HStack(spacing: 8) {
                 MetricCard(
                     label: "HEART RATE",
-                    value: healthKitManager.heartRate > 0 ? "\(Int(healthKitManager.heartRate))" : "--",
+                    value: currentHeartRate > 0 ? "\(Int(currentHeartRate))" : "--",
                     unit: "BPM",
                     color: .red
                 )
@@ -163,7 +169,7 @@ struct BikeComputerView: View {
         HStack(spacing: 20) {
             switch workoutSession.state {
             case .idle:
-                Button(action: { workoutSession.start() }) {
+                Button(action: startWorkout) {
                     Label("Start Workout", systemImage: "play.fill")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
@@ -174,7 +180,7 @@ struct BikeComputerView: View {
                 }
 
             case .active:
-                Button(action: { workoutSession.pause() }) {
+                Button(action: pauseWorkout) {
                     Label("Pause", systemImage: "pause.fill")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
@@ -194,7 +200,7 @@ struct BikeComputerView: View {
                 }
 
             case .paused:
-                Button(action: { workoutSession.resume() }) {
+                Button(action: resumeWorkout) {
                     Label("Resume", systemImage: "play.fill")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
@@ -217,6 +223,11 @@ struct BikeComputerView: View {
         .padding(.horizontal, 16)
     }
 
+    // Prefer Watch HR (real-time from workout session), fall back to HealthKit
+    private var currentHeartRate: Double {
+        connectivityManager.watchHeartRate > 0 ? connectivityManager.watchHeartRate : healthKitManager.heartRate
+    }
+
     // MARK: - Recording
 
     private func startRecording() {
@@ -225,11 +236,34 @@ struct BikeComputerView: View {
             .sink { _ in
                 workoutSession.recordPower(bleManager.power)
                 workoutSession.recordCadence(bleManager.cadence)
-                workoutSession.recordHeartRate(healthKitManager.heartRate)
+                workoutSession.recordHeartRate(currentHeartRate)
+
+                // Send metrics to Watch for display
+                connectivityManager.sendMetrics(
+                    power: Int(bleManager.power),
+                    cadence: Int(bleManager.cadence),
+                    resistance: Int(bleManager.resistance)
+                )
             }
     }
 
+    private func startWorkout() {
+        workoutSession.start()
+        connectivityManager.sendWorkoutAction("start")
+    }
+
+    private func pauseWorkout() {
+        workoutSession.pause()
+        connectivityManager.sendWorkoutAction("pause")
+    }
+
+    private func resumeWorkout() {
+        workoutSession.resume()
+        connectivityManager.sendWorkoutAction("resume")
+    }
+
     private func endWorkout() {
+        connectivityManager.sendWorkoutAction("stop")
         _ = workoutSession.stop()
         onWorkoutEnd()
     }

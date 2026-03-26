@@ -5,6 +5,7 @@ struct PowerMeterApp: App {
     @StateObject private var bleManager = BLEManager()
     @StateObject private var healthKitManager = HealthKitManager()
     @StateObject private var workoutSession = WorkoutSession()
+    @StateObject private var connectivityManager = PhoneConnectivityManager()
 
     var body: some Scene {
         WindowGroup {
@@ -12,6 +13,7 @@ struct PowerMeterApp: App {
                 .environmentObject(bleManager)
                 .environmentObject(healthKitManager)
                 .environmentObject(workoutSession)
+                .environmentObject(connectivityManager)
                 .onAppear {
                     healthKitManager.requestAuthorization()
                 }
