@@ -253,7 +253,8 @@ struct BikeComputerView: View {
                 Button(action: { showingStopConfirmation = true }) {
                     Image(systemName: "stop.fill")
                         .font(.system(size: 20, weight: .bold))
-                        .frame(width: 70, maxHeight: .infinity)
+                        .frame(maxHeight: .infinity)
+                        .frame(width: 70)
                         .background(Color.red.opacity(0.8))
                         .foregroundColor(.white)
                         .cornerRadius(14)
@@ -270,7 +271,8 @@ struct BikeComputerView: View {
                 Button(action: { showingStopConfirmation = true }) {
                     Image(systemName: "stop.fill")
                         .font(.system(size: 20, weight: .bold))
-                        .frame(width: 70, maxHeight: .infinity)
+                        .frame(maxHeight: .infinity)
+                        .frame(width: 70)
                         .background(Color.red.opacity(0.8))
                         .foregroundColor(.white)
                         .cornerRadius(14)
