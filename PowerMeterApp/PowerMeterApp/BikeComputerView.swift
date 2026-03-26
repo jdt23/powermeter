@@ -18,21 +18,20 @@ struct BikeComputerView: View {
     var body: some View {
         GeometryReader { geo in
             let total = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
-            let controlH: CGFloat = 50
-            let statusH: CGFloat = 30
+            let controlH: CGFloat = 48
+            let statusH: CGFloat = 28
             let metricsH = total - controlH - statusH
 
             VStack(spacing: 0) {
                 statusBar.frame(height: statusH)
 
-                // Swipeable pages
                 TabView(selection: $currentPage) {
                     mainPage(height: metricsH).tag(0)
                     if workoutSession.state != .idle {
                         detailPage(height: metricsH).tag(1)
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: workoutSession.state != .idle ? .automatic : .never))
+                .tabViewStyle(.page(indexDisplayMode: .never))
                 .frame(height: metricsH)
 
                 workoutControls.frame(height: controlH)
@@ -50,9 +49,7 @@ struct BikeComputerView: View {
             Button("End Workout", role: .destructive) { endWorkout() }
             Button("Cancel", role: .cancel) {}
         }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
-        }
+        .sheet(isPresented: $showingSettings) { SettingsView() }
     }
 
     // MARK: - Status Bar
@@ -68,24 +65,20 @@ struct BikeComputerView: View {
             }
             Spacer()
             if workoutSession.state != .idle {
-                // Page dots hint
                 HStack(spacing: 3) {
-                    Circle().fill(currentPage == 0 ? Color.white : Color.gray.opacity(0.4))
+                    Circle().fill(currentPage == 0 ? Color.white : Color.white.opacity(0.25))
                         .frame(width: 5, height: 5)
-                    Circle().fill(currentPage == 1 ? Color.white : Color.gray.opacity(0.4))
+                    Circle().fill(currentPage == 1 ? Color.white : Color.white.opacity(0.25))
                         .frame(width: 5, height: 5)
                 }
                 Spacer().frame(width: 8)
-            }
-            if workoutSession.state != .idle {
                 Text(formatDuration(workoutSession.elapsed))
                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                     .foregroundColor(.white)
             } else {
                 Button(action: { showingSettings = true }) {
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(.gray)
+                        .font(.system(size: 16)).foregroundColor(.gray)
                 }
             }
         }
@@ -100,74 +93,68 @@ struct BikeComputerView: View {
         }
     }
 
-    // MARK: - Page 1: Main Metrics
+    // MARK: - Page 1: Main
 
     private func mainPage(height: CGFloat) -> some View {
         let active = workoutSession.state != .idle
-        let gap: CGFloat = 3
-        let rowH = (height - gap * 2) / 3
+        let g: CGFloat = 2
+        let rows: CGFloat = 4
+        let rh = (height - g * (rows - 1)) / rows
 
-        return VStack(spacing: gap) {
-            // Power with zone
-            powerCard(height: rowH, active: active)
+        return VStack(spacing: g) {
+            powerCard(height: rh, active: active)
 
-            // Cadence | Resistance
-            HStack(spacing: gap) {
-                cell("CADENCE", "\(bleManager.cadence)", "RPM", .cyan, rowH,
+            HStack(spacing: g) {
+                cell("CADENCE", "\(bleManager.cadence)", "RPM", .cyan, rh,
                      avg: active ? "avg \(Int(workoutSession.averageCadence))" : nil,
                      peak: active && workoutSession.maxCadence > 0 ? "max \(Int(workoutSession.maxCadence))" : nil)
-                cell("RESISTANCE", "\(bleManager.resistance)", "", .orange, rowH,
+                cell("RESISTANCE", "\(bleManager.resistance)", "", .orange, rh,
                      avg: active ? "avg \(Int(workoutSession.averageResistance))" : nil,
                      peak: active && workoutSession.maxResistance > 0 ? "max \(Int(workoutSession.maxResistance))" : nil)
             }
 
-            // HR | Calories
-            HStack(spacing: gap) {
+            HStack(spacing: g) {
                 cell("HEART RATE",
                      currentHeartRate > 0 ? "\(Int(currentHeartRate))" : "--",
-                     "BPM", .red, rowH,
+                     "BPM", .red, rh,
                      avg: active && workoutSession.averageHeartRate > 0 ? "avg \(Int(workoutSession.averageHeartRate))" : nil,
                      peak: active && workoutSession.maxHeartRate > 0 ? "max \(Int(workoutSession.maxHeartRate))" : nil)
-                cell("CALORIES", "\(Int(workoutSession.totalCalories))", "KCAL", .yellow, rowH)
+                cell("SPEED",
+                     active ? String(format: "%.1f", workoutSession.speed) : "--",
+                     "MPH", .mint, rh,
+                     avg: active && workoutSession.averageSpeed > 0 ? String(format: "avg %.1f", workoutSession.averageSpeed) : nil,
+                     peak: active && workoutSession.maxSpeed > 0 ? String(format: "max %.1f", workoutSession.maxSpeed) : nil)
+            }
+
+            HStack(spacing: g) {
+                cell("DISTANCE",
+                     active ? String(format: "%.2f", workoutSession.distance) : "--",
+                     "MI", .mint, rh)
+                cell("CALORIES", "\(Int(workoutSession.totalCalories))", "KCAL", .yellow, rh)
             }
         }
-        .padding(.horizontal, 3)
+        .padding(.horizontal, 2)
     }
 
-    // MARK: - Page 2: Detailed Stats (swipe right)
+    // MARK: - Page 2: Advanced
 
     private func detailPage(height: CGFloat) -> some View {
-        let gap: CGFloat = 3
-        let rowH = (height - gap * 3) / 4
+        let g: CGFloat = 2
+        let rows: CGFloat = 2
+        let rh = (height - g * (rows - 1)) / rows
 
-        return VStack(spacing: gap) {
-            // Speed | Distance
-            HStack(spacing: gap) {
-                cell("SPEED", String(format: "%.1f", workoutSession.speed), "MPH", .mint, rowH,
-                     avg: workoutSession.averageSpeed > 0 ? String(format: "avg %.1f", workoutSession.averageSpeed) : nil,
-                     peak: workoutSession.maxSpeed > 0 ? String(format: "max %.1f", workoutSession.maxSpeed) : nil)
-                cell("DISTANCE", String(format: "%.2f", workoutSession.distance), "MI", .mint, rowH)
+        return VStack(spacing: g) {
+            HStack(spacing: g) {
+                cell("NORMALIZED PWR", "\(Int(workoutSession.normalizedPower))", "W", .purple, rh)
+                cell("INTENSITY", String(format: "%.2f", workoutSession.intensityFactor), "IF", .indigo, rh)
             }
 
-            // NP | IF
-            HStack(spacing: gap) {
-                cell("NORMALIZED POWER", "\(Int(workoutSession.normalizedPower))", "W", .purple, rowH)
-                cell("INTENSITY", String(format: "%.2f", workoutSession.intensityFactor), "IF", .indigo, rowH)
-            }
-
-            // TSS | Zone
-            HStack(spacing: gap) {
-                cell("TRAINING STRESS", "\(Int(workoutSession.tss))", "TSS", .pink, rowH)
-                zoneCell(height: rowH)
-            }
-
-            // Avg Power | Max Power (redundant but useful on detail page)
-            HStack(spacing: gap) {
-                cell("AVG POWER", "\(Int(workoutSession.averagePower))", "W", .green, rowH)
-                cell("MAX POWER", "\(Int(workoutSession.maxPower))", "W", .green, rowH)
+            HStack(spacing: g) {
+                cell("TRAINING STRESS", "\(Int(workoutSession.tss))", "TSS", .pink, rh)
+                zoneCell(height: rh)
             }
         }
-        .padding(.horizontal, 3)
+        .padding(.horizontal, 2)
     }
 
     // MARK: - Zone Cell
@@ -179,27 +166,23 @@ struct BikeComputerView: View {
         return ZStack {
             RoundedRectangle(cornerRadius: 10)
                 .fill(color.opacity(0.1))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(color.opacity(0.3), lineWidth: 1)
-                )
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(color.opacity(0.3), lineWidth: 1))
 
-            VStack(spacing: 2) {
+            VStack(spacing: 0) {
                 Text("ZONE").font(.system(size: 9, weight: .bold))
                     .foregroundColor(color.opacity(0.65)).tracking(1)
                 Spacer(minLength: 0)
                 Text("Z\(zone.rawValue)")
-                    .font(.system(size: min(height * 0.35, 44), weight: .heavy, design: .rounded))
+                    .font(.system(size: min(height * 0.3, 72), weight: .heavy, design: .rounded))
                     .foregroundColor(color)
                 Text(zone.label)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundColor(color.opacity(0.7))
                 Spacer(minLength: 0)
             }
             .padding(.top, 3)
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
+        .frame(maxWidth: .infinity).frame(height: height)
     }
 
     // MARK: - Power Card
@@ -209,10 +192,10 @@ struct BikeComputerView: View {
         let zc = active ? zoneSwiftColor(zone) : powerColor
 
         return ZStack {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 10)
                 .fill(LinearGradient(colors: [zc.opacity(0.15), Color.white.opacity(0.02)],
                                      startPoint: .top, endPoint: .bottom))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(zc.opacity(0.3), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(zc.opacity(0.3), lineWidth: 1))
 
             VStack(spacing: 0) {
                 HStack {
@@ -223,21 +206,20 @@ struct BikeComputerView: View {
                         Text("Z\(zone.rawValue) \(zone.label)")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(zc.opacity(0.8))
-                            .padding(.horizontal, 8).padding(.vertical, 2)
+                            .padding(.horizontal, 7).padding(.vertical, 2)
                             .background(Capsule().fill(zc.opacity(0.15)))
                     }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 10)
 
                 Spacer(minLength: 0)
 
                 HStack(alignment: .lastTextBaseline, spacing: 4) {
                     Text("\(bleManager.power)")
-                        .font(.system(size: min(height * 0.5, 100), weight: .heavy, design: .rounded))
-                        .foregroundColor(.white)
-                        .minimumScaleFactor(0.4).lineLimit(1)
-                    Text("W").font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(Color.white.opacity(0.4)).padding(.bottom, 4)
+                        .font(.system(size: min(height * 0.52, 100), weight: .heavy, design: .rounded))
+                        .foregroundColor(.white).minimumScaleFactor(0.4).lineLimit(1)
+                    Text("W").font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(Color.white.opacity(0.4)).padding(.bottom, 3)
                 }
 
                 Spacer(minLength: 0)
@@ -247,15 +229,15 @@ struct BikeComputerView: View {
                         statLabel("avg \(Int(workoutSession.averagePower))")
                         statLabel("max \(Int(workoutSession.maxPower))")
                     }
-                    .foregroundColor(zc.opacity(0.45)).padding(.bottom, 3)
+                    .foregroundColor(zc.opacity(0.45)).padding(.bottom, 2)
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, 3)
         }
         .frame(maxWidth: .infinity).frame(height: height)
     }
 
-    // MARK: - Standard Cell
+    // MARK: - Cell
 
     private func cell(
         _ label: String, _ value: String, _ unit: String,
@@ -323,7 +305,7 @@ struct BikeComputerView: View {
     // MARK: - Controls
 
     private var workoutControls: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             switch workoutSession.state {
             case .idle:
                 Button(action: startWorkout) {
@@ -340,7 +322,7 @@ struct BikeComputerView: View {
                 }
                 Button(action: { showingStopConfirmation = true }) {
                     Image(systemName: "stop.fill").font(.system(size: 18, weight: .bold))
-                        .frame(maxHeight: .infinity).frame(width: 60)
+                        .frame(maxHeight: .infinity).frame(width: 58)
                         .background(Color.red.opacity(0.8)).foregroundColor(.white).cornerRadius(10)
                 }
             case .paused:
@@ -351,12 +333,12 @@ struct BikeComputerView: View {
                 }
                 Button(action: { showingStopConfirmation = true }) {
                     Image(systemName: "stop.fill").font(.system(size: 18, weight: .bold))
-                        .frame(maxHeight: .infinity).frame(width: 60)
+                        .frame(maxHeight: .infinity).frame(width: 58)
                         .background(Color.red.opacity(0.8)).foregroundColor(.white).cornerRadius(10)
                 }
             }
         }
-        .padding(.horizontal, 3).padding(.vertical, 2)
+        .padding(.horizontal, 2).padding(.vertical, 2)
     }
 
     private var currentHeartRate: Double {
