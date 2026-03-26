@@ -14,22 +14,21 @@ struct BikeComputerView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let controlHeight: CGFloat = 56
-            let statusHeight: CGFloat = 34
-            let metricsHeight = geo.size.height - controlHeight - statusHeight
+            let total = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
+            let controlH: CGFloat = 52
+            let statusH: CGFloat = 32
+            let gap: CGFloat = 3
+            let metricsH = total - controlH - statusH
 
             VStack(spacing: 0) {
-                statusBar
-                    .frame(height: statusHeight)
-
-                metricsGrid(height: metricsHeight)
-
-                workoutControls
-                    .frame(height: controlHeight)
+                statusBar.frame(height: statusH)
+                metricsGrid(height: metricsH, gap: gap)
+                workoutControls.frame(height: controlH)
             }
+            .frame(width: geo.size.width, height: total)
         }
+        .ignoresSafeArea()
         .background(Color.black)
-        .ignoresSafeArea(.container, edges: .bottom)
         .onAppear { startRecording() }
         .onDisappear { recordingCancellable?.cancel() }
         .confirmationDialog("End Workout?", isPresented: $showingStopConfirmation) {
@@ -52,7 +51,7 @@ struct BikeComputerView: View {
             Spacer()
             if workoutSession.state != .idle {
                 Text(formatDuration(workoutSession.elapsed))
-                    .font(.system(size: 24, weight: .bold, design: .monospaced))
+                    .font(.system(size: 22, weight: .bold, design: .monospaced))
                     .foregroundColor(.white)
             }
         }
@@ -69,47 +68,42 @@ struct BikeComputerView: View {
 
     // MARK: - Metrics
 
-    private func metricsGrid(height: CGFloat) -> some View {
+    private func metricsGrid(height: CGFloat, gap: CGFloat) -> some View {
         let active = workoutSession.state != .idle
-        let gap: CGFloat = 4
-        let rowHeight = (height - gap * 2 - 8) / 3  // 3 rows, 2 gaps, small top/bottom pad
+        let rowH = (height - gap * 2) / 3
 
         return VStack(spacing: gap) {
-            // Row 1: POWER
-            powerCard(height: rowHeight, active: active)
+            powerCard(height: rowH, active: active)
 
-            // Row 2: CADENCE | RESISTANCE
             HStack(spacing: gap) {
                 cell(label: "CADENCE", value: "\(bleManager.cadence)", unit: "RPM",
-                     color: .cyan, height: rowHeight,
+                     color: .cyan, height: rowH,
                      avg: active ? "avg \(Int(workoutSession.averageCadence))" : nil,
                      peak: active && workoutSession.maxCadence > 0 ? "max \(Int(workoutSession.maxCadence))" : nil)
                 cell(label: "RESISTANCE", value: "\(bleManager.resistance)", unit: "",
-                     color: .orange, height: rowHeight,
+                     color: .orange, height: rowH,
                      avg: active ? "avg \(Int(workoutSession.averageResistance))" : nil,
                      peak: active && workoutSession.maxResistance > 0 ? "max \(Int(workoutSession.maxResistance))" : nil)
             }
 
-            // Row 3: HR | CALORIES
             HStack(spacing: gap) {
                 cell(label: "HEART RATE",
                      value: currentHeartRate > 0 ? "\(Int(currentHeartRate))" : "--",
-                     unit: "BPM", color: .red, height: rowHeight,
+                     unit: "BPM", color: .red, height: rowH,
                      avg: active && workoutSession.averageHeartRate > 0 ? "avg \(Int(workoutSession.averageHeartRate))" : nil,
                      peak: active && workoutSession.maxHeartRate > 0 ? "max \(Int(workoutSession.maxHeartRate))" : nil)
                 cell(label: "CALORIES", value: "\(Int(workoutSession.totalCalories))", unit: "KCAL",
-                     color: .yellow, height: rowHeight)
+                     color: .yellow, height: rowH)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 4)
     }
 
     // MARK: - Power Card
 
     private func powerCard(height: CGFloat, active: Bool) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 14)
                 .fill(
                     LinearGradient(
                         colors: [powerColor.opacity(0.12), Color.white.opacity(0.02)],
@@ -117,7 +111,7 @@ struct BikeComputerView: View {
                     )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 14)
                         .strokeBorder(powerColor.opacity(0.25), lineWidth: 1)
                 )
 
@@ -131,7 +125,7 @@ struct BikeComputerView: View {
 
                 HStack(alignment: .lastTextBaseline, spacing: 4) {
                     Text("\(bleManager.power)")
-                        .font(.system(size: min(height * 0.5, 110), weight: .heavy, design: .rounded))
+                        .font(.system(size: min(height * 0.52, 120), weight: .heavy, design: .rounded))
                         .foregroundColor(.white)
                         .minimumScaleFactor(0.4)
                         .lineLimit(1)
@@ -149,16 +143,16 @@ struct BikeComputerView: View {
                         statLabel("max \(Int(workoutSession.maxPower))")
                     }
                     .foregroundColor(powerColor.opacity(0.45))
-                    .padding(.bottom, 6)
+                    .padding(.bottom, 4)
                 }
             }
-            .padding(.vertical, 6)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .frame(height: height)
     }
 
-    // MARK: - Generic Metric Cell
+    // MARK: - Metric Cell
 
     private func cell(
         label: String, value: String, unit: String,
@@ -166,10 +160,10 @@ struct BikeComputerView: View {
         avg: String? = nil, peak: String? = nil
     ) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 12)
                 .fill(Color.white.opacity(0.035))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: 12)
                         .strokeBorder(color.opacity(0.15), lineWidth: 1)
                 )
 
@@ -183,7 +177,7 @@ struct BikeComputerView: View {
 
                 HStack(alignment: .lastTextBaseline, spacing: 2) {
                     Text(value)
-                        .font(.system(size: min(height * 0.38, 56), weight: .bold, design: .rounded))
+                        .font(.system(size: min(height * 0.4, 64), weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .minimumScaleFactor(0.4)
                         .lineLimit(1)
@@ -198,24 +192,21 @@ struct BikeComputerView: View {
                 Spacer(minLength: 0)
 
                 if avg != nil || peak != nil {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         if let avg { statLabel(avg).foregroundColor(color.opacity(0.4)) }
                         if let peak { statLabel(peak).foregroundColor(color.opacity(0.4)) }
                     }
-                    .padding(.bottom, 4)
-                } else {
-                    Spacer().frame(height: 18) // keep value vertically centered
+                    .padding(.bottom, 3)
                 }
             }
-            .padding(.vertical, 6)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .frame(height: height)
     }
 
     private func statLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
+        Text(text).font(.system(size: 12, weight: .semibold, design: .rounded))
     }
 
     private var powerColor: Color {
@@ -230,7 +221,7 @@ struct BikeComputerView: View {
     // MARK: - Controls
 
     private var workoutControls: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             switch workoutSession.state {
             case .idle:
                 Button(action: startWorkout) {
@@ -239,7 +230,7 @@ struct BikeComputerView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.green)
                         .foregroundColor(.black)
-                        .cornerRadius(14)
+                        .cornerRadius(12)
                 }
             case .active:
                 Button(action: pauseWorkout) {
@@ -248,16 +239,16 @@ struct BikeComputerView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.white.opacity(0.1))
                         .foregroundColor(.white)
-                        .cornerRadius(14)
+                        .cornerRadius(12)
                 }
                 Button(action: { showingStopConfirmation = true }) {
                     Image(systemName: "stop.fill")
                         .font(.system(size: 20, weight: .bold))
                         .frame(maxHeight: .infinity)
-                        .frame(width: 70)
+                        .frame(width: 64)
                         .background(Color.red.opacity(0.8))
                         .foregroundColor(.white)
-                        .cornerRadius(14)
+                        .cornerRadius(12)
                 }
             case .paused:
                 Button(action: resumeWorkout) {
@@ -266,21 +257,21 @@ struct BikeComputerView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.green)
                         .foregroundColor(.black)
-                        .cornerRadius(14)
+                        .cornerRadius(12)
                 }
                 Button(action: { showingStopConfirmation = true }) {
                     Image(systemName: "stop.fill")
                         .font(.system(size: 20, weight: .bold))
                         .frame(maxHeight: .infinity)
-                        .frame(width: 70)
+                        .frame(width: 64)
                         .background(Color.red.opacity(0.8))
                         .foregroundColor(.white)
-                        .cornerRadius(14)
+                        .cornerRadius(12)
                 }
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
     }
 
     private var currentHeartRate: Double {

@@ -13,27 +13,29 @@ class HealthKitManager: ObservableObject {
     private let activeEnergyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!
     private let workoutType = HKObjectType.workoutType()
 
+    // These may not be available on all devices — save attempts are best-effort
+    private let cyclingPowerType = HKQuantityType.quantityType(forIdentifier: .cyclingPower)
+    private let cyclingCadenceType = HKQuantityType.quantityType(forIdentifier: .cyclingCadence)
+
     func requestAuthorization() {
         guard HKHealthStore.isHealthDataAvailable() else { return }
 
         let readTypes: Set<HKObjectType> = [heartRateType, activeEnergyType, workoutType]
-        let writeTypes: Set<HKSampleType> = [workoutType, activeEnergyType, heartRateType]
+        var writeTypes: Set<HKSampleType> = [workoutType, activeEnergyType, heartRateType]
+        if let p = cyclingPowerType { writeTypes.insert(p) }
+        if let c = cyclingCadenceType { writeTypes.insert(c) }
 
         healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { success, _ in
             DispatchQueue.main.async {
                 self.isAuthorized = success
-                if success {
-                    self.startHeartRateStream()
-                }
+                if success { self.startHeartRateStream() }
             }
         }
     }
 
     func startHeartRateStream() {
         stopHeartRateStream()
-
         let predicate = HKQuery.predicateForSamples(withStart: Date(), end: nil, options: .strictStartDate)
-
         let query = HKAnchoredObjectQuery(
             type: heartRateType, predicate: predicate, anchor: nil, limit: HKObjectQueryNoLimit
         ) { [weak self] _, samples, _, _, _ in
@@ -42,7 +44,6 @@ class HealthKitManager: ObservableObject {
         query.updateHandler = { [weak self] _, samples, _, _, _ in
             self?.processHeartRateSamples(samples)
         }
-
         heartRateQuery = query
         healthStore.execute(query)
     }
@@ -71,7 +72,6 @@ class HealthKitManager: ObservableObject {
         totalCalories: Double,
         completion: @escaping (Bool, Error?) -> Void
     ) {
-        // Safety: ensure end > start
         let safeEnd = end > start ? end : start.addingTimeInterval(1)
 
         let config = HKWorkoutConfiguration()
@@ -80,50 +80,64 @@ class HealthKitManager: ObservableObject {
 
         let builder = HKWorkoutBuilder(healthStore: healthStore, configuration: config, device: nil)
 
-        // Add a timeout: if HealthKit doesn't respond in 10 seconds, fail gracefully
+        // Thread-safe timeout
         var completed = false
-        let completionLock = NSLock()
-
+        let lock = NSLock()
         let safeComplete: (Bool, Error?) -> Void = { success, error in
-            completionLock.lock()
-            guard !completed else { completionLock.unlock(); return }
+            lock.lock()
+            guard !completed else { lock.unlock(); return }
             completed = true
-            completionLock.unlock()
+            lock.unlock()
             completion(success, error)
         }
 
-        DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
+        DispatchQueue.global().asyncAfter(deadline: .now() + 15) {
             safeComplete(false, NSError(domain: "PowerMeter", code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "HealthKit save timed out. Check Health permissions in Settings > Health > Data Access & Devices > PowerMeter."]))
+                userInfo: [NSLocalizedDescriptionKey: "HealthKit save timed out. Check Health permissions in Settings > Health > Data Access."]))
         }
 
         builder.beginCollection(withStart: start) { success, error in
             guard success else {
                 safeComplete(false, error ?? NSError(domain: "PowerMeter", code: -2,
-                    userInfo: [NSLocalizedDescriptionKey: "Could not begin workout collection. Grant all Health permissions in Settings."]))
+                    userInfo: [NSLocalizedDescriptionKey: "Could not begin workout. Grant Health permissions in Settings."]))
                 return
             }
 
-            // Only add heart rate and calories — these are well-supported types
             var samples: [HKQuantitySample] = []
 
+            // Heart rate
             let hrUnit = HKUnit.count().unitDivided(by: .minute())
             for (date, value) in heartRateSamples where value > 0 {
-                // Clamp sample dates to workout range
-                let sampleDate = Swift.min(Swift.max(date, start), safeEnd)
-                samples.append(HKQuantitySample(
-                    type: self.heartRateType,
-                    quantity: HKQuantity(unit: hrUnit, doubleValue: value),
-                    start: sampleDate, end: sampleDate
-                ))
+                let d = Swift.min(Swift.max(date, start), safeEnd)
+                samples.append(HKQuantitySample(type: self.heartRateType,
+                    quantity: HKQuantity(unit: hrUnit, doubleValue: value), start: d, end: d))
             }
 
+            // Cycling power
+            if let powerType = self.cyclingPowerType {
+                let wattUnit = HKUnit.watt()
+                for (date, value) in powerSamples where value > 0 {
+                    let d = Swift.min(Swift.max(date, start), safeEnd)
+                    samples.append(HKQuantitySample(type: powerType,
+                        quantity: HKQuantity(unit: wattUnit, doubleValue: value), start: d, end: d))
+                }
+            }
+
+            // Cycling cadence
+            if let cadenceType = self.cyclingCadenceType {
+                let rpmUnit = HKUnit.count().unitDivided(by: .minute())
+                for (date, value) in cadenceSamples where value > 0 {
+                    let d = Swift.min(Swift.max(date, start), safeEnd)
+                    samples.append(HKQuantitySample(type: cadenceType,
+                        quantity: HKQuantity(unit: rpmUnit, doubleValue: value), start: d, end: d))
+                }
+            }
+
+            // Active energy
             if totalCalories > 0 {
-                samples.append(HKQuantitySample(
-                    type: self.activeEnergyType,
+                samples.append(HKQuantitySample(type: self.activeEnergyType,
                     quantity: HKQuantity(unit: .kilocalorie(), doubleValue: totalCalories),
-                    start: start, end: safeEnd
-                ))
+                    start: start, end: safeEnd))
             }
 
             let finish = {
@@ -137,8 +151,18 @@ class HealthKitManager: ObservableObject {
             if samples.isEmpty {
                 finish()
             } else {
-                builder.add(samples) { _, _ in
-                    finish()
+                builder.add(samples) { addOk, _ in
+                    if !addOk {
+                        // If adding all samples fails, try with just energy
+                        let energyOnly = samples.filter { $0.quantityType == self.activeEnergyType }
+                        if energyOnly.isEmpty {
+                            finish()
+                        } else {
+                            builder.add(energyOnly) { _, _ in finish() }
+                        }
+                    } else {
+                        finish()
+                    }
                 }
             }
         }
