@@ -25,8 +25,15 @@ targets:
         DEVELOPMENT_TEAM: 6PTSS87H97
     entitlements:
       path: PowerMeterApp/PowerMeterApp.entitlements
-    capabilities:
-      - HealthKit
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
+    attributes:
+      SystemCapabilities:
+        com.apple.HealthKit:
+          enabled: 1
+        com.apple.BackgroundModes:
+          enabled: 1
     dependencies:
       - target: PowerMeterWatch
 
@@ -49,5 +56,9 @@ targets:
         DEVELOPMENT_TEAM: 6PTSS87H97
     entitlements:
       path: PowerMeterWatch/PowerMeterWatch.entitlements
-    capabilities:
-      - HealthKit
+      properties:
+        com.apple.developer.healthkit: true
+    attributes:
+      SystemCapabilities:
+        com.apple.HealthKit:
+          enabled: 1
