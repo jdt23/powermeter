@@ -23,7 +23,7 @@ struct BikeComputerView: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            // Status bar
+            // Status bar — fixed height
             HStack(spacing: 4) {
                 Circle().fill(connColor).frame(width: 6, height: 6)
                 Text(bleManager.connectionState.rawValue).font(.system(size: 9)).foregroundColor(.gray)
@@ -50,14 +50,14 @@ struct BikeComputerView: View {
             .padding(.horizontal, 10)
             .frame(height: 28)
 
-            // Swipeable metrics area
+            // Metrics — swipeable, fills ALL remaining space
             GeometryReader { geo in
                 let w = geo.size.width
                 let h = geo.size.height
                 HStack(spacing: 0) {
-                    mainPage.frame(width: w, height: h)
+                    mainPage(h: h).frame(width: w, height: h)
                     if hasPage2 {
-                        detailPage.frame(width: w, height: h)
+                        detailPage(h: h).frame(width: w, height: h)
                     }
                 }
                 .frame(height: h)
@@ -77,7 +77,7 @@ struct BikeComputerView: View {
             }
             .clipped()
 
-            // Controls
+            // Controls — fixed height
             HStack(spacing: 6) {
                 if !on {
                     Button(action: startWorkout) {
@@ -105,7 +105,6 @@ struct BikeComputerView: View {
             .padding(.horizontal, 2)
             .frame(height: 44)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
         .onAppear { startRecording(); workoutSession.ftp = ftp; workoutSession.maxHR = maxHR }
         .onDisappear { recordingCancellable?.cancel() }
@@ -116,14 +115,18 @@ struct BikeComputerView: View {
         .sheet(isPresented: $showingSettings) { SettingsView() }
     }
 
-    // MARK: - Page 1: prioritize time, cadence, HR. Show live data always.
+    // MARK: - Page 1
+    // Each row gets an explicit height = h / numberOfRows
 
-    private var mainPage: some View {
+    private func mainPage(h: CGFloat) -> some View {
+        let rows: CGFloat = 4
+        let gaps: CGFloat = 2 * (rows - 1)
+        let rowH = (h - gaps) / rows
         let z = workoutSession.hrZone
         let zc = hr > 0 ? zoneColor(z) : Color.gray
 
         return VStack(spacing: 2) {
-            // HR Zone card (hero) — always shows live HR
+            // Row 1: HR hero
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(LinearGradient(colors: [zc.opacity(0.15), Color.white.opacity(0.02)], startPoint: .top, endPoint: .bottom))
@@ -153,8 +156,9 @@ struct BikeComputerView: View {
                     }
                 }.padding(.top, 4)
             }
+            .frame(height: rowH)
 
-            // Cadence | Power — always show live data
+            // Row 2: Cadence | Power
             HStack(spacing: 2) {
                 tile("CADENCE", "\(bleManager.cadence)", "RPM", .cyan,
                      on ? "avg \(Int(workoutSession.averageCadence))" : nil,
@@ -163,40 +167,46 @@ struct BikeComputerView: View {
                      on ? "avg \(Int(workoutSession.averagePower))" : nil,
                      on && workoutSession.maxPower > 0 ? "max \(Int(workoutSession.maxPower))" : nil)
             }
+            .frame(height: rowH)
 
-            // Speed | Distance
+            // Row 3: Speed | Distance
             HStack(spacing: 2) {
                 tile("SPEED", on || workoutSession.speed > 0 ? String(format: "%.1f", workoutSession.speed) : "--", "MPH", .mint,
                      on && workoutSession.averageSpeed > 0 ? String(format: "avg %.1f", workoutSession.averageSpeed) : nil,
                      on && workoutSession.maxSpeed > 0 ? String(format: "max %.1f", workoutSession.maxSpeed) : nil)
                 tile("DISTANCE", on ? String(format: "%.2f", workoutSession.distance) : "--", "MI", .mint, nil, nil)
             }
+            .frame(height: rowH)
 
-            // Resistance | Calories
+            // Row 4: Resistance | Calories
             HStack(spacing: 2) {
                 tile("RESISTANCE", "\(bleManager.resistance)", "", .orange,
                      on ? "avg \(Int(workoutSession.averageResistance))" : nil,
                      on && workoutSession.maxResistance > 0 ? "max \(Int(workoutSession.maxResistance))" : nil)
                 tile("CALORIES", "\(Int(workoutSession.totalCalories))", "KCAL", .yellow, nil, nil)
             }
+            .frame(height: rowH)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Page 2: Advanced metrics
+    // MARK: - Page 2
 
-    private var detailPage: some View {
-        VStack(spacing: 2) {
+    private func detailPage(h: CGFloat) -> some View {
+        let rowH = (h - 2) / 2
+
+        return VStack(spacing: 2) {
             HStack(spacing: 2) {
                 tile("NORMALIZED PWR", "\(Int(workoutSession.normalizedPower))", "W", .purple, nil, nil)
                 tile("INTENSITY", String(format: "%.2f", workoutSession.intensityFactor), "IF", .indigo, nil, nil)
             }
+            .frame(height: rowH)
+
             HStack(spacing: 2) {
                 tile("TRAINING STRESS", "\(Int(workoutSession.tss))", "TSS", .pink, nil, nil)
                 tile("FTP", "\(Int(ftp))", "W", .gray, nil, nil)
             }
+            .frame(height: rowH)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Tile
@@ -226,6 +236,7 @@ struct BikeComputerView: View {
                 }
             }.padding(.vertical, 4)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Helpers
@@ -241,7 +252,6 @@ struct BikeComputerView: View {
     }
 
     private func startRecording() {
-        // Record even before workout starts — just don't accumulate stats
         recordingCancellable = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
             .sink { _ in
                 if on {
@@ -251,7 +261,6 @@ struct BikeComputerView: View {
                     workoutSession.recordHeartRate(hr)
                     workoutSession.recordSpeed(cadence: bleManager.cadence, resistance: bleManager.resistance)
                 }
-                // Always send to watch if connected
                 connectivityManager.sendMetrics(
                     power: Int(bleManager.power), cadence: Int(bleManager.cadence), resistance: Int(bleManager.resistance),
                     speed: workoutSession.speed, distance: workoutSession.distance, calories: workoutSession.totalCalories)
