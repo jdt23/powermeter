@@ -128,7 +128,11 @@ extension BLEManager: CBPeripheralDelegate {
         DispatchQueue.main.async {
             switch characteristic.uuid {
             case self.powerUUID:
-                if data.count >= 2 {
+                // Standard Cycling Power Measurement: bytes 0-1 = flags, bytes 2-3 = power
+                if data.count >= 4 {
+                    self.power = UInt16(data[2]) | (UInt16(data[3]) << 8)
+                } else if data.count >= 2 {
+                    // Fallback for old firmware format (raw uint16)
                     self.power = data.withUnsafeBytes { $0.load(as: UInt16.self) }
                 }
             case self.resistanceUUID:

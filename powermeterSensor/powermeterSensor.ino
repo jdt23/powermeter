@@ -7,7 +7,8 @@
 #include <ArduinoBLE.h>
 
 BLEService powerMeterService("1818");
-BLEUnsignedShortCharacteristic powerChar("2A63", BLERead | BLENotify );
+// Standard Cycling Power Measurement: 4 bytes (2 flags + 2 power)
+BLECharacteristic powerChar("2A63", BLERead | BLENotify, 4);
 BLEUnsignedCharCharacteristic  resistanceChar("2AD6", BLERead | BLENotify );
 BLEUnsignedCharCharacteristic  cadenceChar("2A5B", BLERead | BLENotify );
 
@@ -274,7 +275,15 @@ void loop() {
       // only write new values if needed
       if (power_short_new != power_short) {
         power_short = power_short_new;
-        powerChar.writeValue(power_short);
+        // Standard Cycling Power Measurement format:
+        // Bytes 0-1: Flags (0x0000 = no optional fields)
+        // Bytes 2-3: Instantaneous Power (sint16, little-endian)
+        uint8_t powerData[4];
+        powerData[0] = 0x00; // flags low byte
+        powerData[1] = 0x00; // flags high byte
+        powerData[2] = (uint8_t)(power_short & 0xFF);       // power low byte
+        powerData[3] = (uint8_t)((power_short >> 8) & 0xFF); // power high byte
+        powerChar.writeValue(powerData, 4);
       }
 
       if (cadenceMeasurement.canGetMeasurement()) {
