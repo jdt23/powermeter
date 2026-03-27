@@ -53,12 +53,14 @@ struct BikeComputerView: View {
             // Swipeable metrics area
             GeometryReader { geo in
                 let w = geo.size.width
+                let h = geo.size.height
                 HStack(spacing: 0) {
-                    mainPage.frame(width: w)
+                    mainPage.frame(width: w, height: h)
                     if hasPage2 {
-                        detailPage.frame(width: w)
+                        detailPage.frame(width: w, height: h)
                     }
                 }
+                .frame(height: h)
                 .offset(x: page == 0 ? dragOffset : -w + dragOffset)
                 .gesture(
                     DragGesture()

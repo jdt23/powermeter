@@ -7,18 +7,20 @@ struct ContentView: View {
     @State private var showingSummary = false
 
     var body: some View {
-        if showingSummary, let summary = workoutSession.lastSummary {
-            WorkoutSummaryView(summary: summary) {
-                showingSummary = false
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.black)
-        } else {
-            BikeComputerView(onWorkoutEnd: {
-                if workoutSession.lastSummary != nil {
-                    showingSummary = true
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if showingSummary, let summary = workoutSession.lastSummary {
+                WorkoutSummaryView(summary: summary) {
+                    showingSummary = false
                 }
-            })
+            } else {
+                BikeComputerView(onWorkoutEnd: {
+                    if workoutSession.lastSummary != nil {
+                        showingSummary = true
+                    }
+                })
+            }
         }
     }
 }
