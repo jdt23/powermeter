@@ -18,8 +18,10 @@ struct BikeComputerView: View {
     private var on: Bool { workoutSession.state != .idle }
 
     var body: some View {
-        // Dead simple: VStack, fixed status+controls, everything else flexible
         VStack(spacing: 0) {
+            // Small spacer for Dynamic Island area
+            Color.black.frame(height: 59)
+
             // Status bar
             HStack(spacing: 4) {
                 Circle().fill(connColor).frame(width: 6, height: 6)
@@ -89,7 +91,11 @@ struct BikeComputerView: View {
             .padding(.horizontal, 2)
             .frame(maxWidth: .infinity)
             .frame(height: 44)
+
+            // Small spacer for home indicator area
+            Color.black.frame(height: 34)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
         .onAppear { startRecording(); workoutSession.ftp = ftp }
         .onDisappear { recordingCancellable?.cancel() }

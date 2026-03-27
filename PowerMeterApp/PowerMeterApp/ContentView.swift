@@ -19,7 +19,6 @@ struct ContentView: View {
                     showingSummary = true
                 }
             })
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
