@@ -36,6 +36,7 @@ targets:
           enabled: 1
     dependencies:
       - target: PowerMeterWatch
+        embed: true
 
   PowerMeterWatch:
     type: application
