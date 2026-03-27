@@ -60,7 +60,7 @@ struct BikeComputerView: View {
                     if showDetail {
                         Button(action: { showDetail = false }) {
                             Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold))
-                                .frame(width: 44, maxHeight: .infinity).background(Color.white.opacity(0.1)).foregroundColor(.white).cornerRadius(8)
+                                .frame(maxHeight: .infinity).frame(width: 44).background(Color.white.opacity(0.1)).foregroundColor(.white).cornerRadius(8)
                         }
                     }
                     if workoutSession.state == .active {
@@ -77,12 +77,12 @@ struct BikeComputerView: View {
                     if !showDetail {
                         Button(action: { showDetail = true }) {
                             Image(systemName: "chevron.right").font(.system(size: 16, weight: .bold))
-                                .frame(width: 44, maxHeight: .infinity).background(Color.white.opacity(0.1)).foregroundColor(.white).cornerRadius(8)
+                                .frame(maxHeight: .infinity).frame(width: 44).background(Color.white.opacity(0.1)).foregroundColor(.white).cornerRadius(8)
                         }
                     }
                     Button(action: { showingStopConfirmation = true }) {
                         Image(systemName: "stop.fill").font(.system(size: 16, weight: .bold))
-                            .frame(width: 54, maxHeight: .infinity).background(Color.red.opacity(0.8)).foregroundColor(.white).cornerRadius(8)
+                            .frame(maxHeight: .infinity).frame(width: 54).background(Color.red.opacity(0.8)).foregroundColor(.white).cornerRadius(8)
                     }
                 }
             }
