@@ -24,15 +24,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 /// Custom UIHostingController that dynamically negates safe area insets.
 /// safeAreaRegions = [] is broken on iOS 26 — this is the workaround.
 class FullScreenHostingController<Content: View>: UIHostingController<Content> {
-    override func viewSafeAreaInsetsDidChange() {
-        super.viewSafeAreaInsetsDidChange()
-        let insets = view.safeAreaInsets
-        additionalSafeAreaInsets = UIEdgeInsets(
-            top: -insets.top,
-            left: -insets.left,
-            bottom: -insets.bottom,
-            right: -insets.right
-        )
+    private var didApplyInsets = false
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        if !didApplyInsets {
+            didApplyInsets = true
+            let insets = view.safeAreaInsets
+            if insets.top > 0 || insets.bottom > 0 {
+                additionalSafeAreaInsets = UIEdgeInsets(
+                    top: -insets.top,
+                    left: -insets.left,
+                    bottom: -insets.bottom,
+                    right: -insets.right
+                )
+            }
+        }
     }
 
     override var prefersStatusBarHidden: Bool { true }
