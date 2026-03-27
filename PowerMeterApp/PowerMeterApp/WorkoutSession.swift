@@ -7,39 +7,27 @@ enum WorkoutState {
     case paused
 }
 
-enum PowerZone: Int, CaseIterable {
-    case z1 = 1, z2, z3, z4, z5, z6
+enum HeartRateZone: Int, CaseIterable {
+    case z1 = 1, z2, z3, z4, z5
 
     var label: String {
         switch self {
         case .z1: return "RECOVERY"
-        case .z2: return "ENDURANCE"
-        case .z3: return "TEMPO"
-        case .z4: return "THRESHOLD"
-        case .z5: return "VO2 MAX"
-        case .z6: return "ANAEROBIC"
+        case .z2: return "FAT BURN"
+        case .z3: return "CARDIO"
+        case .z4: return "HARD"
+        case .z5: return "PEAK"
         }
     }
 
-    var color: String {
-        switch self {
-        case .z1: return "gray"
-        case .z2: return "blue"
-        case .z3: return "green"
-        case .z4: return "yellow"
-        case .z5: return "orange"
-        case .z6: return "red"
-        }
-    }
-
-    static func zone(watts: Double, ftp: Double) -> PowerZone {
-        let pct = watts / ftp
-        if pct < 0.55 { return .z1 }
-        if pct < 0.75 { return .z2 }
-        if pct < 0.90 { return .z3 }
-        if pct < 1.05 { return .z4 }
-        if pct < 1.20 { return .z5 }
-        return .z6
+    static func zone(bpm: Double, maxHR: Double) -> HeartRateZone {
+        guard maxHR > 0 else { return .z1 }
+        let pct = bpm / maxHR
+        if pct < 0.60 { return .z1 }
+        if pct < 0.70 { return .z2 }
+        if pct < 0.80 { return .z3 }
+        if pct < 0.90 { return .z4 }
+        return .z5
     }
 }
 
@@ -66,6 +54,7 @@ struct WorkoutSummary {
     let cadenceSampleCount: Int
     let heartRateSampleCount: Int
     let ftp: Double
+    let watchSaved: Bool
 }
 
 class WorkoutSession: ObservableObject {
@@ -82,25 +71,24 @@ class WorkoutSession: ObservableObject {
     @Published var totalCalories: Double = 0
     @Published var lastSummary: WorkoutSummary?
 
-    // New metrics
-    @Published var speed: Double = 0          // mph
+    @Published var speed: Double = 0
     @Published var averageSpeed: Double = 0
     @Published var maxSpeed: Double = 0
-    @Published var distance: Double = 0       // miles
+    @Published var distance: Double = 0
     @Published var normalizedPower: Double = 0
     @Published var intensityFactor: Double = 0
     @Published var tss: Double = 0
-    @Published var powerZone: PowerZone = .z1
+    @Published var hrZone: HeartRateZone = .z1
 
-    // FTP — default 200W, user can adjust
     var ftp: Double = 200.0
+    var maxHR: Double = 190.0
+    var watchSavedWorkout = false
 
     private var startDate: Date?
     private var pauseDate: Date?
     private var accumulatedPause: TimeInterval = 0
     private var timer: AnyCancellable?
 
-    // Sample storage for HealthKit export
     private(set) var powerSamples: [(Date, Double)] = []
     private(set) var cadenceSamples: [(Date, Double)] = []
     private(set) var heartRateSamples: [(Date, Double)] = []
@@ -116,10 +104,8 @@ class WorkoutSession: ObservableObject {
     private var speedSum: Double = 0
     private var speedCount: Int = 0
     private var lastRecordTime: Date?
-
-    // For Normalized Power: 30-second rolling average
-    private var powerWindow: [Double] = []  // raw power values (one per 2s sample)
-    private var np4Sum: Double = 0          // sum of (30s_avg)^4
+    private var powerWindow: [Double] = []
+    private var np4Sum: Double = 0
     private var np4Count: Int = 0
 
     var workoutStartDate: Date? { startDate }
@@ -149,33 +135,21 @@ class WorkoutSession: ObservableObject {
     func stop() -> WorkoutSummary? {
         timer?.cancel()
         state = .idle
-
         guard let start = startDate else { return nil }
         let end = Date()
-
         let summary = WorkoutSummary(
-            startDate: start,
-            endDate: end,
-            duration: elapsed,
-            averagePower: averagePower,
-            maxPower: maxPower,
-            normalizedPower: normalizedPower,
-            intensityFactor: intensityFactor,
-            tss: tss,
-            averageCadence: averageCadence,
-            maxCadence: maxCadence,
-            averageResistance: averageResistance,
-            maxResistance: maxResistance,
-            averageHeartRate: averageHeartRate,
-            maxHeartRate: maxHeartRate,
-            averageSpeed: averageSpeed,
-            maxSpeed: maxSpeed,
-            totalDistance: distance,
-            totalCalories: totalCalories,
+            startDate: start, endDate: end, duration: elapsed,
+            averagePower: averagePower, maxPower: maxPower,
+            normalizedPower: normalizedPower, intensityFactor: intensityFactor, tss: tss,
+            averageCadence: averageCadence, maxCadence: maxCadence,
+            averageResistance: averageResistance, maxResistance: maxResistance,
+            averageHeartRate: averageHeartRate, maxHeartRate: maxHeartRate,
+            averageSpeed: averageSpeed, maxSpeed: maxSpeed,
+            totalDistance: distance, totalCalories: totalCalories,
             powerSampleCount: powerSamples.filter { $0.1 > 0 }.count,
             cadenceSampleCount: cadenceSamples.filter { $0.1 > 0 }.count,
             heartRateSampleCount: heartRateSamples.filter { $0.1 > 0 }.count,
-            ftp: ftp
+            ftp: ftp, watchSaved: watchSavedWorkout
         )
         lastSummary = summary
         return summary
@@ -189,29 +163,18 @@ class WorkoutSession: ObservableObject {
         powerCount += 1
         averagePower = powerSum / Double(powerCount)
         if v > maxPower { maxPower = v }
-
-        // Calories: watts * seconds / 4184 * 4 (25% metabolic efficiency)
         totalCalories = powerSum * 2.0 / 4184.0 * 4.0
 
-        // Power zone
-        powerZone = PowerZone.zone(watts: v, ftp: ftp)
-
-        // Normalized Power: 30-second rolling average
+        // Normalized Power
         powerWindow.append(v)
-        let windowSize = 15  // 15 samples * 2s = 30 seconds
-        if powerWindow.count > windowSize {
-            powerWindow.removeFirst(powerWindow.count - windowSize)
-        }
+        let windowSize = 15
+        if powerWindow.count > windowSize { powerWindow.removeFirst(powerWindow.count - windowSize) }
         if powerWindow.count >= windowSize {
             let rollingAvg = powerWindow.reduce(0, +) / Double(windowSize)
             np4Sum += pow(rollingAvg, 4)
             np4Count += 1
             normalizedPower = pow(np4Sum / Double(np4Count), 0.25)
-
-            // IF = NP / FTP
             intensityFactor = ftp > 0 ? normalizedPower / ftp : 0
-
-            // TSS = (sec * NP * IF) / (FTP * 3600) * 100
             if ftp > 0 && elapsed > 0 {
                 tss = (elapsed * normalizedPower * intensityFactor) / (ftp * 3600.0) * 100.0
             }
@@ -244,18 +207,22 @@ class WorkoutSession: ObservableObject {
         hrCount += 1
         averageHeartRate = hrSum / Double(hrCount)
         if value > maxHeartRate { maxHeartRate = value }
+        hrZone = HeartRateZone.zone(bpm: value, maxHR: maxHR)
     }
 
-    /// Compute speed from cadence + resistance using Peloton formula, accumulate distance
+    /// Speed from cadence using simplified bike gearing model
     func recordSpeed(cadence: UInt8, resistance: UInt8) {
         guard state == .active else { return }
         let cad = Double(cadence)
         let res = Double(resistance)
 
-        // Speed (mph) from Peloton formula: (Cadence - 35)^0.4 * (Resistance/100) * 9 + 0.4
+        // Speed based on cadence with resistance as drag factor
+        // Base: ~0.3 mph per RPM (typical indoor bike gearing)
+        // Resistance reduces effective speed
         var spd: Double = 0
-        if cad > 35 && res > 0 {
-            spd = pow(cad - 35.0, 0.4) * (res / 100.0) * 9.0 + 0.4
+        if cad > 0 {
+            let resistanceFactor = max(0.3, 1.0 - (res / 150.0))
+            spd = cad * 0.3 * resistanceFactor
         }
         speed = spd
 
@@ -264,21 +231,17 @@ class WorkoutSession: ObservableObject {
         averageSpeed = speedSum / Double(speedCount)
         if spd > maxSpeed { maxSpeed = spd }
 
-        // Accumulate distance: speed (mph) * time (hours)
         let now = Date()
         if let last = lastRecordTime {
-            let dt = now.timeIntervalSince(last) / 3600.0  // hours
+            let dt = now.timeIntervalSince(last) / 3600.0
             distance += spd * dt
         }
         lastRecordTime = now
     }
 
     private func startTimer() {
-        timer = Timer.publish(every: 1, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.updateElapsed()
-            }
+        timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+            .sink { [weak self] _ in self?.updateElapsed() }
     }
 
     private func updateElapsed() {
@@ -287,43 +250,17 @@ class WorkoutSession: ObservableObject {
     }
 
     private func reset() {
-        elapsed = 0
-        averagePower = 0
-        maxPower = 0
-        averageCadence = 0
-        maxCadence = 0
-        averageResistance = 0
-        maxResistance = 0
-        averageHeartRate = 0
-        maxHeartRate = 0
-        totalCalories = 0
-        speed = 0
-        averageSpeed = 0
-        maxSpeed = 0
-        distance = 0
-        normalizedPower = 0
-        intensityFactor = 0
-        tss = 0
-        powerZone = .z1
-        powerSamples = []
-        cadenceSamples = []
-        heartRateSamples = []
-        powerSum = 0
-        powerCount = 0
-        cadenceSum = 0
-        cadenceCount = 0
-        resistanceSum = 0
-        resistanceCount = 0
-        hrSum = 0
-        hrCount = 0
-        speedSum = 0
-        speedCount = 0
-        powerWindow = []
-        np4Sum = 0
-        np4Count = 0
-        accumulatedPause = 0
-        pauseDate = nil
-        lastSummary = nil
-        lastRecordTime = nil
+        elapsed = 0; averagePower = 0; maxPower = 0
+        averageCadence = 0; maxCadence = 0
+        averageResistance = 0; maxResistance = 0
+        averageHeartRate = 0; maxHeartRate = 0
+        totalCalories = 0; speed = 0; averageSpeed = 0; maxSpeed = 0
+        distance = 0; normalizedPower = 0; intensityFactor = 0; tss = 0
+        hrZone = .z1; powerSamples = []; cadenceSamples = []; heartRateSamples = []
+        powerSum = 0; powerCount = 0; cadenceSum = 0; cadenceCount = 0
+        resistanceSum = 0; resistanceCount = 0; hrSum = 0; hrCount = 0
+        speedSum = 0; speedCount = 0; powerWindow = []; np4Sum = 0; np4Count = 0
+        accumulatedPause = 0; pauseDate = nil; lastSummary = nil; lastRecordTime = nil
+        watchSavedWorkout = false
     }
 }

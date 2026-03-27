@@ -4,6 +4,7 @@ import WatchConnectivity
 class PhoneConnectivityManager: NSObject, ObservableObject {
     @Published var isWatchReachable = false
     @Published var watchHeartRate: Double = 0
+    @Published var watchSavedWorkout = false
 
     override init() {
         super.init()
@@ -11,6 +12,11 @@ class PhoneConnectivityManager: NSObject, ObservableObject {
             WCSession.default.delegate = self
             WCSession.default.activate()
         }
+    }
+
+    func activateWatch() {
+        guard WCSession.default.activationState == .activated, WCSession.default.isReachable else { return }
+        WCSession.default.sendMessage(["action": "wake"], replyHandler: nil, errorHandler: nil)
     }
 
     func sendWorkoutAction(_ action: String) {
@@ -34,6 +40,7 @@ extension PhoneConnectivityManager: WCSessionDelegate {
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         DispatchQueue.main.async {
             self.isWatchReachable = session.isReachable
+            if session.isReachable { self.activateWatch() }
         }
     }
 
@@ -46,14 +53,16 @@ extension PhoneConnectivityManager: WCSessionDelegate {
     func sessionReachabilityDidChange(_ session: WCSession) {
         DispatchQueue.main.async {
             self.isWatchReachable = session.isReachable
+            if session.isReachable { self.activateWatch() }
         }
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         if let hr = message["heartRate"] as? Double {
-            DispatchQueue.main.async {
-                self.watchHeartRate = hr
-            }
+            DispatchQueue.main.async { self.watchHeartRate = hr }
+        }
+        if message["workoutSaved"] as? Bool == true {
+            DispatchQueue.main.async { self.watchSavedWorkout = true }
         }
     }
 }

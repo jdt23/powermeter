@@ -1,10 +1,6 @@
 import UIKit
 import SwiftUI
 
-// Use UIKit app lifecycle instead of SwiftUI App protocol.
-// This is the ONLY way to set safeAreaRegions=[] on the ROOT
-// hosting controller, which is required for true edge-to-edge.
-
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(
@@ -25,10 +21,28 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 }
 
+/// Custom UIHostingController that dynamically negates safe area insets.
+/// safeAreaRegions = [] is broken on iOS 26 — this is the workaround.
+class FullScreenHostingController<Content: View>: UIHostingController<Content> {
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        let insets = view.safeAreaInsets
+        additionalSafeAreaInsets = UIEdgeInsets(
+            top: -insets.top,
+            left: -insets.left,
+            bottom: -insets.bottom,
+            right: -insets.right
+        )
+    }
+
+    override var prefersStatusBarHidden: Bool { true }
+    override var prefersHomeIndicatorAutoHidden: Bool { true }
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { .all }
+}
+
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
 
-    // State objects live here — they persist for the app's lifetime
     let bleManager = BLEManager()
     let healthKitManager = HealthKitManager()
     let workoutSession = WorkoutSession()
@@ -50,7 +64,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             .environmentObject(connectivityManager)
             .preferredColorScheme(.dark)
 
-        let hostingController = UIHostingController(rootView: rootView)
+        let hostingController = FullScreenHostingController(rootView: rootView)
         hostingController.safeAreaRegions = []
         hostingController.view.backgroundColor = .black
 
@@ -58,5 +72,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.rootViewController = hostingController
         window.makeKeyAndVisible()
         self.window = window
+
+        // Wake the Watch app immediately
+        connectivityManager.activateWatch()
     }
 }

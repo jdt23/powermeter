@@ -18,6 +18,11 @@ class WatchConnectivityManager: NSObject, ObservableObject {
         guard WCSession.default.isReachable else { return }
         WCSession.default.sendMessage(["heartRate": bpm], replyHandler: nil, errorHandler: nil)
     }
+
+    func sendWorkoutSaved() {
+        guard WCSession.default.isReachable else { return }
+        WCSession.default.sendMessage(["workoutSaved": true], replyHandler: nil, errorHandler: nil)
+    }
 }
 
 extension WatchConnectivityManager: WCSessionDelegate {

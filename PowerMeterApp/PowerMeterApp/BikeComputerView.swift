@@ -12,16 +12,17 @@ struct BikeComputerView: View {
     @State private var showingStopConfirmation = false
     @State private var showingSettings = false
     @State private var recordingCancellable: AnyCancellable?
-    @State private var showDetail = false
+    @State private var page = 0
+    @State private var dragOffset: CGFloat = 0
     @AppStorage("ftp") private var ftp: Double = 200.0
+    @AppStorage("maxHR") private var maxHR: Double = 190.0
 
     private var on: Bool { workoutSession.state != .idle }
+    private var hasPage2: Bool { on }
+    private var hr: Double { connectivityManager.watchHeartRate > 0 ? connectivityManager.watchHeartRate : healthKitManager.heartRate }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Small spacer for Dynamic Island area
-            Color.black.frame(height: 59)
-
+        VStack(spacing: 2) {
             // Status bar
             HStack(spacing: 4) {
                 Circle().fill(connColor).frame(width: 6, height: 6)
@@ -30,6 +31,13 @@ struct BikeComputerView: View {
                     Image(systemName: "applewatch.radiowaves.left.and.right").font(.system(size: 8)).foregroundColor(.green)
                 }
                 Spacer()
+                if hasPage2 {
+                    HStack(spacing: 3) {
+                        Circle().fill(page == 0 ? Color.white : Color.white.opacity(0.2)).frame(width: 4, height: 4)
+                        Circle().fill(page == 1 ? Color.white : Color.white.opacity(0.2)).frame(width: 4, height: 4)
+                    }
+                    Spacer().frame(width: 6)
+                }
                 if on {
                     Text(fmtTime(workoutSession.elapsed))
                         .font(.system(size: 18, weight: .bold, design: .monospaced)).foregroundColor(.white)
@@ -40,16 +48,32 @@ struct BikeComputerView: View {
                 }
             }
             .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
             .frame(height: 28)
 
-            if !showDetail {
-                // PAGE 1: Main metrics
-                mainMetrics
-            } else {
-                // PAGE 2: Detail metrics
-                detailMetrics
+            // Swipeable metrics area
+            GeometryReader { geo in
+                let w = geo.size.width
+                HStack(spacing: 0) {
+                    mainPage.frame(width: w)
+                    if hasPage2 {
+                        detailPage.frame(width: w)
+                    }
+                }
+                .offset(x: page == 0 ? dragOffset : -w + dragOffset)
+                .gesture(
+                    DragGesture()
+                        .onChanged { v in guard hasPage2 else { return }; dragOffset = v.translation.width }
+                        .onEnded { v in
+                            guard hasPage2 else { return }
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                if v.translation.width < -60 && page == 0 { page = 1 }
+                                else if v.translation.width > 60 && page == 1 { page = 0 }
+                                dragOffset = 0
+                            }
+                        }
+                )
             }
+            .clipped()
 
             // Controls
             HStack(spacing: 6) {
@@ -59,12 +83,6 @@ struct BikeComputerView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.green).foregroundColor(.black).cornerRadius(8)
                     }
                 } else {
-                    if showDetail {
-                        Button(action: { showDetail = false }) {
-                            Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold))
-                                .frame(maxHeight: .infinity).frame(width: 44).background(Color.white.opacity(0.1)).foregroundColor(.white).cornerRadius(8)
-                        }
-                    }
                     if workoutSession.state == .active {
                         Button(action: pauseWorkout) {
                             Image(systemName: "pause.fill").font(.system(size: 16, weight: .bold))
@@ -76,12 +94,6 @@ struct BikeComputerView: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.green).foregroundColor(.black).cornerRadius(8)
                         }
                     }
-                    if !showDetail {
-                        Button(action: { showDetail = true }) {
-                            Image(systemName: "chevron.right").font(.system(size: 16, weight: .bold))
-                                .frame(maxHeight: .infinity).frame(width: 44).background(Color.white.opacity(0.1)).foregroundColor(.white).cornerRadius(8)
-                        }
-                    }
                     Button(action: { showingStopConfirmation = true }) {
                         Image(systemName: "stop.fill").font(.system(size: 16, weight: .bold))
                             .frame(maxHeight: .infinity).frame(width: 54).background(Color.red.opacity(0.8)).foregroundColor(.white).cornerRadius(8)
@@ -89,15 +101,11 @@ struct BikeComputerView: View {
                 }
             }
             .padding(.horizontal, 2)
-            .frame(maxWidth: .infinity)
             .frame(height: 44)
-
-            // Small spacer for home indicator area
-            Color.black.frame(height: 34)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
-        .onAppear { startRecording(); workoutSession.ftp = ftp }
+        .onAppear { startRecording(); workoutSession.ftp = ftp; workoutSession.maxHR = maxHR }
         .onDisappear { recordingCancellable?.cancel() }
         .confirmationDialog("End Workout?", isPresented: $showingStopConfirmation) {
             Button("End Workout", role: .destructive) { endWorkout() }
@@ -106,45 +114,76 @@ struct BikeComputerView: View {
         .sheet(isPresented: $showingSettings) { SettingsView() }
     }
 
-    // MARK: - Main Metrics (Page 1)
+    // MARK: - Page 1: prioritize time, cadence, HR. Show live data always.
 
-    private var mainMetrics: some View {
-        VStack(spacing: 2) {
-            // Power
-            pwrCard
+    private var mainPage: some View {
+        let z = workoutSession.hrZone
+        let zc = hr > 0 ? zoneColor(z) : Color.gray
 
-            // Cadence | Resistance
+        return VStack(spacing: 2) {
+            // HR Zone card (hero) — always shows live HR
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(LinearGradient(colors: [zc.opacity(0.15), Color.white.opacity(0.02)], startPoint: .top, endPoint: .bottom))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(zc.opacity(0.3), lineWidth: 1))
+                VStack {
+                    HStack {
+                        Text("HEART RATE").font(.system(size: 9, weight: .bold)).foregroundColor(zc.opacity(0.7)).tracking(2)
+                        Spacer()
+                        if on && hr > 0 {
+                            Text("Z\(z.rawValue) \(z.label)").font(.system(size: 9, weight: .bold)).foregroundColor(zc.opacity(0.8))
+                                .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(zc.opacity(0.15)))
+                        }
+                    }.padding(.horizontal, 8)
+                    Spacer(minLength: 0)
+                    HStack(alignment: .lastTextBaseline, spacing: 3) {
+                        Text(hr > 0 ? "\(Int(hr))" : "--")
+                            .font(.system(size: 72, weight: .heavy, design: .rounded))
+                            .foregroundColor(.white).minimumScaleFactor(0.3).lineLimit(1)
+                        Text("BPM").font(.system(size: 16, weight: .semibold)).foregroundColor(Color.white.opacity(0.4))
+                    }
+                    Spacer(minLength: 0)
+                    if on && workoutSession.averageHeartRate > 0 {
+                        HStack(spacing: 14) {
+                            Text("avg \(Int(workoutSession.averageHeartRate))").font(.system(size: 13, weight: .semibold, design: .rounded))
+                            Text("max \(Int(workoutSession.maxHeartRate))").font(.system(size: 13, weight: .semibold, design: .rounded))
+                        }.foregroundColor(zc.opacity(0.45)).padding(.bottom, 2)
+                    }
+                }.padding(.top, 4)
+            }
+
+            // Cadence | Power — always show live data
             HStack(spacing: 2) {
                 tile("CADENCE", "\(bleManager.cadence)", "RPM", .cyan,
                      on ? "avg \(Int(workoutSession.averageCadence))" : nil,
                      on && workoutSession.maxCadence > 0 ? "max \(Int(workoutSession.maxCadence))" : nil)
+                tile("POWER", "\(bleManager.power)", "W", .green,
+                     on ? "avg \(Int(workoutSession.averagePower))" : nil,
+                     on && workoutSession.maxPower > 0 ? "max \(Int(workoutSession.maxPower))" : nil)
+            }
+
+            // Speed | Distance
+            HStack(spacing: 2) {
+                tile("SPEED", on || workoutSession.speed > 0 ? String(format: "%.1f", workoutSession.speed) : "--", "MPH", .mint,
+                     on && workoutSession.averageSpeed > 0 ? String(format: "avg %.1f", workoutSession.averageSpeed) : nil,
+                     on && workoutSession.maxSpeed > 0 ? String(format: "max %.1f", workoutSession.maxSpeed) : nil)
+                tile("DISTANCE", on ? String(format: "%.2f", workoutSession.distance) : "--", "MI", .mint, nil, nil)
+            }
+
+            // Resistance | Calories
+            HStack(spacing: 2) {
                 tile("RESISTANCE", "\(bleManager.resistance)", "", .orange,
                      on ? "avg \(Int(workoutSession.averageResistance))" : nil,
                      on && workoutSession.maxResistance > 0 ? "max \(Int(workoutSession.maxResistance))" : nil)
-            }
-
-            // HR | Speed
-            HStack(spacing: 2) {
-                tile("HEART RATE", currentHeartRate > 0 ? "\(Int(currentHeartRate))" : "--", "BPM", .red,
-                     on && workoutSession.averageHeartRate > 0 ? "avg \(Int(workoutSession.averageHeartRate))" : nil,
-                     on && workoutSession.maxHeartRate > 0 ? "max \(Int(workoutSession.maxHeartRate))" : nil)
-                tile("SPEED", on ? String(format: "%.1f", workoutSession.speed) : "--", "MPH", .mint,
-                     on && workoutSession.averageSpeed > 0 ? String(format: "avg %.1f", workoutSession.averageSpeed) : nil,
-                     on && workoutSession.maxSpeed > 0 ? String(format: "max %.1f", workoutSession.maxSpeed) : nil)
-            }
-
-            // Distance | Calories
-            HStack(spacing: 2) {
-                tile("DISTANCE", on ? String(format: "%.2f", workoutSession.distance) : "--", "MI", .mint, nil, nil)
                 tile("CALORIES", "\(Int(workoutSession.totalCalories))", "KCAL", .yellow, nil, nil)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Detail Metrics (Page 2)
+    // MARK: - Page 2: Advanced metrics
 
-    private var detailMetrics: some View {
+    private var detailPage: some View {
         VStack(spacing: 2) {
             HStack(spacing: 2) {
                 tile("NORMALIZED PWR", "\(Int(workoutSession.normalizedPower))", "W", .purple, nil, nil)
@@ -152,63 +191,10 @@ struct BikeComputerView: View {
             }
             HStack(spacing: 2) {
                 tile("TRAINING STRESS", "\(Int(workoutSession.tss))", "TSS", .pink, nil, nil)
-                zoneTile
+                tile("FTP", "\(Int(ftp))", "W", .gray, nil, nil)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    // MARK: - Power Card
-
-    private var pwrCard: some View {
-        let z = workoutSession.powerZone; let c = on ? zColor(z) : pwrColor
-        return ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(LinearGradient(colors: [c.opacity(0.15), Color.white.opacity(0.02)], startPoint: .top, endPoint: .bottom))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(c.opacity(0.3), lineWidth: 1))
-            VStack {
-                HStack {
-                    Text("POWER").font(.system(size: 9, weight: .bold)).foregroundColor(c.opacity(0.7)).tracking(2)
-                    Spacer()
-                    if on {
-                        Text("Z\(z.rawValue) \(z.label)").font(.system(size: 9, weight: .bold)).foregroundColor(c.opacity(0.8))
-                            .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(c.opacity(0.15)))
-                    }
-                }.padding(.horizontal, 8)
-                Spacer(minLength: 0)
-                HStack(alignment: .lastTextBaseline, spacing: 3) {
-                    Text("\(bleManager.power)")
-                        .font(.system(size: 80, weight: .heavy, design: .rounded))
-                        .foregroundColor(.white).minimumScaleFactor(0.3).lineLimit(1)
-                    Text("W").font(.system(size: 18, weight: .semibold)).foregroundColor(Color.white.opacity(0.4))
-                }
-                Spacer(minLength: 0)
-                if on {
-                    HStack(spacing: 14) {
-                        Text("avg \(Int(workoutSession.averagePower))").font(.system(size: 10, weight: .semibold, design: .rounded))
-                        Text("max \(Int(workoutSession.maxPower))").font(.system(size: 10, weight: .semibold, design: .rounded))
-                    }.foregroundColor(c.opacity(0.45)).padding(.bottom, 2)
-                }
-            }.padding(.top, 4)
-        }
-    }
-
-    // MARK: - Zone Tile
-
-    private var zoneTile: some View {
-        let z = workoutSession.powerZone; let c = zColor(z)
-        return ZStack {
-            RoundedRectangle(cornerRadius: 8).fill(c.opacity(0.1))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(c.opacity(0.3), lineWidth: 1))
-            VStack {
-                Text("ZONE").font(.system(size: 9, weight: .bold)).foregroundColor(c.opacity(0.65)).tracking(1)
-                Spacer(minLength: 0)
-                Text("Z\(z.rawValue)").font(.system(size: 60, weight: .heavy, design: .rounded)).foregroundColor(c)
-                    .minimumScaleFactor(0.3).lineLimit(1)
-                Text(z.label).font(.system(size: 16, weight: .bold)).foregroundColor(c.opacity(0.7))
-                Spacer(minLength: 0)
-            }.padding(.top, 4)
-        }
     }
 
     // MARK: - Tile
@@ -231,10 +217,10 @@ struct BikeComputerView: View {
                 }
                 Spacer(minLength: 0)
                 if avg != nil || peak != nil {
-                    HStack(spacing: 4) {
-                        if let a = avg { Text(a).foregroundColor(color.opacity(0.4)) }
-                        if let p = peak { Text(p).foregroundColor(color.opacity(0.4)) }
-                    }.font(.system(size: 9, weight: .semibold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.7)
+                    HStack(spacing: 6) {
+                        if let a = avg { Text(a).foregroundColor(color.opacity(0.5)) }
+                        if let p = peak { Text(p).foregroundColor(color.opacity(0.5)) }
+                    }.font(.system(size: 13, weight: .semibold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.7)
                 }
             }.padding(.vertical, 4)
         }
@@ -247,33 +233,43 @@ struct BikeComputerView: View {
         case .connected: return .green; case .scanning, .connecting: return .yellow; case .disconnected: return .red
         }
     }
-    private func zColor(_ z: PowerZone) -> Color {
-        switch z { case .z1: return .gray; case .z2: return .blue; case .z3: return .green; case .z4: return .yellow; case .z5: return .orange; case .z6: return .red }
+
+    private func zoneColor(_ z: HeartRateZone) -> Color {
+        switch z { case .z1: return .gray; case .z2: return .blue; case .z3: return .green; case .z4: return .orange; case .z5: return .red }
     }
-    private var pwrColor: Color {
-        let p = Int(bleManager.power)
-        if p == 0 { return .gray }; if p < 100 { return .green }; if p < 200 { return .yellow }; if p < 300 { return .orange }; return .red
-    }
-    private var currentHeartRate: Double { connectivityManager.watchHeartRate > 0 ? connectivityManager.watchHeartRate : healthKitManager.heartRate }
 
     private func startRecording() {
+        // Record even before workout starts — just don't accumulate stats
         recordingCancellable = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
             .sink { _ in
-                workoutSession.recordPower(bleManager.power)
-                workoutSession.recordCadence(bleManager.cadence)
-                workoutSession.recordResistance(bleManager.resistance)
-                workoutSession.recordHeartRate(currentHeartRate)
-                workoutSession.recordSpeed(cadence: bleManager.cadence, resistance: bleManager.resistance)
+                if on {
+                    workoutSession.recordPower(bleManager.power)
+                    workoutSession.recordCadence(bleManager.cadence)
+                    workoutSession.recordResistance(bleManager.resistance)
+                    workoutSession.recordHeartRate(hr)
+                    workoutSession.recordSpeed(cadence: bleManager.cadence, resistance: bleManager.resistance)
+                }
+                // Always send to watch if connected
                 connectivityManager.sendMetrics(
                     power: Int(bleManager.power), cadence: Int(bleManager.cadence), resistance: Int(bleManager.resistance),
                     speed: workoutSession.speed, distance: workoutSession.distance, calories: workoutSession.totalCalories)
             }
     }
 
-    private func startWorkout() { workoutSession.ftp = ftp; workoutSession.start(); connectivityManager.sendWorkoutAction("start") }
+    private func startWorkout() {
+        workoutSession.ftp = ftp; workoutSession.maxHR = maxHR
+        workoutSession.start()
+        connectivityManager.sendWorkoutAction("start")
+    }
     private func pauseWorkout() { workoutSession.pause(); connectivityManager.sendWorkoutAction("pause") }
     private func resumeWorkout() { workoutSession.resume(); connectivityManager.sendWorkoutAction("resume") }
-    private func endWorkout() { connectivityManager.sendWorkoutAction("stop"); _ = workoutSession.stop(); showDetail = false; onWorkoutEnd() }
+    private func endWorkout() {
+        connectivityManager.sendWorkoutAction("stop")
+        workoutSession.watchSavedWorkout = connectivityManager.watchSavedWorkout
+        _ = workoutSession.stop()
+        page = 0
+        onWorkoutEnd()
+    }
 
     private func fmtTime(_ t: TimeInterval) -> String {
         let h = Int(t)/3600; let m = (Int(t)%3600)/60; let s = Int(t)%60

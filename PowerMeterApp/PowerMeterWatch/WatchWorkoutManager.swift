@@ -95,7 +95,7 @@ class WatchWorkoutManager: NSObject, ObservableObject {
         session?.end()
 
         builder?.endCollection(withEnd: Date()) { [weak self] _, _ in
-            self?.builder?.finishWorkout { _, _ in
+            self?.builder?.finishWorkout { workout, _ in
                 DispatchQueue.main.async {
                     self?.isActive = false
                     self?.isPaused = false
@@ -105,6 +105,10 @@ class WatchWorkoutManager: NSObject, ObservableObject {
                     self?.cadence = 0
                     self?.resistance = 0
                     self?.elapsed = 0
+                    // Notify iPhone that Watch saved the workout
+                    if workout != nil {
+                        self?.connectivityManager?.sendWorkoutSaved()
+                    }
                 }
             }
         }
