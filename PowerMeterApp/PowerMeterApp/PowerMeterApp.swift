@@ -24,21 +24,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 /// Custom UIHostingController that dynamically negates safe area insets.
 /// safeAreaRegions = [] is broken on iOS 26 — this is the workaround.
 class FullScreenHostingController<Content: View>: UIHostingController<Content> {
-    private var didApplyInsets = false
-
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if !didApplyInsets {
-            didApplyInsets = true
-            let insets = view.safeAreaInsets
-            if insets.top > 0 || insets.bottom > 0 {
-                additionalSafeAreaInsets = UIEdgeInsets(
-                    top: -insets.top,
-                    left: -insets.left,
-                    bottom: -insets.bottom,
-                    right: -insets.right
-                )
-            }
+        // Only negate when there are actual insets to negate.
+        // Once negated, safeAreaInsets becomes 0, so this won't loop.
+        let insets = view.safeAreaInsets
+        if insets.top > 0 || insets.bottom > 0 || insets.left > 0 || insets.right > 0 {
+            additionalSafeAreaInsets = UIEdgeInsets(
+                top: -insets.top,
+                left: -insets.left,
+                bottom: -insets.bottom,
+                right: -insets.right
+            )
         }
     }
 
