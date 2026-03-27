@@ -11,6 +11,9 @@ class WatchWorkoutManager: NSObject, ObservableObject {
     @Published var cadence: Int = 0
     @Published var resistance: Int = 0
     @Published var elapsed: TimeInterval = 0
+    @Published var speed: Double = 0
+    @Published var distance: Double = 0
+    @Published var calories: Double = 0
 
     var connectivityManager: WatchConnectivityManager?
 
@@ -122,11 +125,15 @@ class WatchWorkoutManager: NSObject, ObservableObject {
         builder.add([sample]) { _, _ in }
     }
 
-    func updateMetrics(power: Int, cadence: Int, resistance: Int) {
+    func updateMetrics(power: Int, cadence: Int, resistance: Int,
+                        speed: Double = 0, distance: Double = 0, calories: Double = 0) {
         DispatchQueue.main.async {
             self.power = power
             self.cadence = cadence
             self.resistance = resistance
+            self.speed = speed
+            self.distance = distance
+            self.calories = calories
         }
         addPowerSample(Double(power))
         addCadenceSample(Double(cadence))

@@ -18,10 +18,12 @@ class PhoneConnectivityManager: NSObject, ObservableObject {
         WCSession.default.sendMessage(["action": action], replyHandler: nil, errorHandler: nil)
     }
 
-    func sendMetrics(power: Int, cadence: Int, resistance: Int) {
+    func sendMetrics(power: Int, cadence: Int, resistance: Int,
+                      speed: Double = 0, distance: Double = 0, calories: Double = 0) {
         guard WCSession.default.isReachable else { return }
         WCSession.default.sendMessage(
-            ["power": power, "cadence": cadence, "resistance": resistance],
+            ["power": power, "cadence": cadence, "resistance": resistance,
+             "speed": speed, "distance": distance, "calories": calories],
             replyHandler: nil,
             errorHandler: nil
         )

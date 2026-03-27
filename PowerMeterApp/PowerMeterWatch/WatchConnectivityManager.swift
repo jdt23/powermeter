@@ -56,7 +56,12 @@ extension WatchConnectivityManager: WCSessionDelegate {
         if let power = message["power"] as? Int,
            let cadence = message["cadence"] as? Int,
            let resistance = message["resistance"] as? Int {
-            self.workoutManager?.updateMetrics(power: power, cadence: cadence, resistance: resistance)
+            let speed = message["speed"] as? Double ?? 0
+            let distance = message["distance"] as? Double ?? 0
+            let calories = message["calories"] as? Double ?? 0
+            self.workoutManager?.updateMetrics(
+                power: power, cadence: cadence, resistance: resistance,
+                speed: speed, distance: distance, calories: calories)
         }
     }
 }

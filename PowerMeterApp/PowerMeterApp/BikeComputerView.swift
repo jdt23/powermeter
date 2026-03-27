@@ -264,7 +264,9 @@ struct BikeComputerView: View {
                 workoutSession.recordResistance(bleManager.resistance)
                 workoutSession.recordHeartRate(currentHeartRate)
                 workoutSession.recordSpeed(cadence: bleManager.cadence, resistance: bleManager.resistance)
-                connectivityManager.sendMetrics(power: Int(bleManager.power), cadence: Int(bleManager.cadence), resistance: Int(bleManager.resistance))
+                connectivityManager.sendMetrics(
+                    power: Int(bleManager.power), cadence: Int(bleManager.cadence), resistance: Int(bleManager.resistance),
+                    speed: workoutSession.speed, distance: workoutSession.distance, calories: workoutSession.totalCalories)
             }
     }
 
